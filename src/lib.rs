@@ -1,10 +1,23 @@
 use asr::{
-    future::next_tick,
+    future::{next_tick, retry},
     game_engine::unity::mono::Module,
     Process,
 };
 
 asr::async_main!(stable);
+
+// --------------------------------------------------------
+
+const PROCESS_NAMES: [&str; 6] = [
+    "Hollow Knight",
+    "hollow_knight.exe",
+    "hollow_knight.x",
+    "hollow_knight.x86_64",
+    "SuperliminalSteam",
+    "SuperliminalSteam.exe",
+];
+
+// --------------------------------------------------------
 
 async fn main() {
     // TODO: Set up some general state and settings.
@@ -12,7 +25,9 @@ async fn main() {
     asr::print_message("Hello, World!");
 
     loop {
-        let process = Process::wait_attach("Hollow Knight").await;
+        let process = retry(|| {
+            PROCESS_NAMES.into_iter().find_map(Process::attach)
+        }).await;
         process
             .until_closes(async {
                 let module = Module::wait_attach_auto_detect(&process).await;
