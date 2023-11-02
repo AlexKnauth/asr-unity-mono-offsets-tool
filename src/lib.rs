@@ -24,6 +24,15 @@ const PROCESS_NAMES: [&str; 6] = [
     "SuperliminalSteam.exe",
 ];
 
+const MONO_NAMES: [&str; 6] = [
+    "libmono.0.dylib",
+    "libmono.so",
+    "libmonobdwgc-2.0.dylib",
+    "libmonobdwgc-2.0.so",
+    "mono-2.0-bdwgc.dll",
+    "mono.dll",
+];
+
 // --------------------------------------------------------
 
 async fn main() {
@@ -60,6 +69,15 @@ async fn main() {
 async fn option_main(process: &Process) -> Option<()> {
     let format = process_detect_binary_format(&process)?;
     asr::print_message(&format!("binary format: {:?}", format));
+
+    let (mono_name, mono_path, mono_range) = MONO_NAMES.into_iter().find_map(|mono_name| {
+        let mono_path = process.get_module_path(mono_name).ok()?;
+        let mono_range = process.get_module_range(mono_name).ok()?;
+        Some((mono_name, mono_path, mono_range))
+    })?;
+    asr::print_message(&format!("mono_name: {}", mono_name));
+    asr::print_message(&format!("mono_path: {}", mono_path));
+    assert_eq!(path_detect_binary_format(&mono_path), Some(format));
     let module = Module::wait_attach_auto_detect(&process).await;
     let image = module.wait_get_default_image(&process).await;
 

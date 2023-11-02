@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use asr::Process;
 
 use crate::file::file_read_all_bytes;
@@ -15,7 +17,15 @@ pub enum BinaryFormat {
 
 pub fn process_detect_binary_format(process: &Process) -> Option<BinaryFormat> {
     let path = process.get_path().ok()?;
+    path_detect_binary_format(path)
+}
+
+pub fn path_detect_binary_format<P: AsRef<Path>>(path: P) -> Option<BinaryFormat> {
     let bytes = file_read_all_bytes(path).ok()?;
+    bytes_detect_binary_format(&bytes)
+}
+
+fn bytes_detect_binary_format(bytes: &[u8]) -> Option<BinaryFormat> {
     if bytes.starts_with(&[0x4D, 0x5A]) {
         Some(BinaryFormat::PE)
     } else if bytes.starts_with(&[0x7F, 0x45, 0x4C, 0x46]) {
