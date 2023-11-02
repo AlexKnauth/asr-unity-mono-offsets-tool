@@ -5,7 +5,7 @@ mod file_format;
 use asr::{
     future::{next_tick, retry},
     game_engine::unity::mono::Module,
-    Process, file_format::pe,
+    Process, file_format::pe, Address, Address32, signature::Signature, Address64,
 };
 
 use binary_format::*;
@@ -16,8 +16,9 @@ asr::async_main!(stable);
 
 // --------------------------------------------------------
 
-const PROCESS_NAMES: [&str; 6] = [
+const PROCESS_NAMES: [&str; 7] = [
     "Hollow Knight",
+    "hollow_knight",
     "hollow_knight.exe",
     "hollow_knight.x",
     "hollow_knight.x86_64",
@@ -107,6 +108,53 @@ async fn option_main(process: &Process) -> Option<()> {
         }
     };
     asr::print_message(&format!("mono_assembly_foreach_address: {}", mono_assembly_foreach_address));
+
+    let assemblies_pointer: Address = match (deref_type, format) {
+        (DerefType::Bit64, BinaryFormat::PE) => {
+            const SIG_MONO_64_PE: Signature<3> = Signature::new("48 8B 0D");
+            let scan_address: Address = SIG_MONO_64_PE
+                .scan_process_range(process, (mono_assembly_foreach_address, 0x100))?
+                + 3;
+            scan_address + 0x4 + process.read::<i32>(scan_address).ok()?
+        },
+        (DerefType::Bit64, BinaryFormat::ELF) => {
+            const SIG_MONO_64_ELF: Signature<3> = Signature::new("48 8B 3D");
+            // RIP-relative addressing
+            // 3 is the offset to the next thing after the signature
+            let scan_address = SIG_MONO_64_ELF.scan_process_range(process, (mono_assembly_foreach_address, 0x100))? + 3;
+            // 4 is the offset to the next instruction after relative
+            scan_address + 0x4 + process.read::<i32>(scan_address).ok()?
+        },
+        (DerefType::Bit64, BinaryFormat::MachO) => {
+            const SIG_MONO_64_MACHO: Signature<3> = Signature::new("48 8B 3D");
+            // RIP-relative addressing
+            // 3 is the offset to the next thing after the signature
+            let scan_address = SIG_MONO_64_MACHO.scan_process_range(process, (mono_assembly_foreach_address, 0x100))? + 3;
+            // 4 is the offset to the next instruction after relative
+            scan_address + 0x4 + process.read::<i32>(scan_address).ok()?
+        },
+        (DerefType::Bit32, BinaryFormat::PE) => {
+            const SIG_32_1: Signature<2> = Signature::new("FF 35");
+            const SIG_32_2: Signature<2> = Signature::new("8B 0D");
+
+            let ptr = [SIG_32_1, SIG_32_2].iter().find_map(|sig| {
+                sig.scan_process_range(process, (mono_assembly_foreach_address, 0x100))
+            })? + 2;
+
+            process.read::<Address32>(ptr + 2).ok()?.into()
+        },
+        (DerefType::Bit32, BinaryFormat::ELF) => { return None; },
+        (DerefType::Bit32, BinaryFormat::MachO) => {
+            return None;
+        },
+    };
+    asr::print_message(&format!("assemblies_pointer: {}", assemblies_pointer));
+
+    let assemblies: Address = match deref_type {
+        DerefType::Bit64 => process.read::<Address64>(assemblies_pointer).ok()?.into(),
+        DerefType::Bit32 => process.read::<Address32>(assemblies_pointer).ok()?.into(),
+    };
+    asr::print_message(&format!("assemblies: {}", assemblies));
 
     let module = Module::wait_attach_auto_detect(&process).await;
     let image = module.wait_get_default_image(&process).await;
