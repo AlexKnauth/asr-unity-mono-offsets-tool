@@ -5,10 +5,12 @@ mod file_format;
 use asr::{
     future::{next_tick, retry},
     game_engine::unity::mono::Module,
-    Process,
+    Process, file_format::pe,
 };
 
 use binary_format::*;
+
+use crate::{file::file_read_all_bytes, file_format::{elf, macho}};
 
 asr::async_main!(stable);
 
@@ -84,6 +86,27 @@ async fn option_main(process: &Process) -> Option<()> {
         BinaryFormat::MachO => file_format::macho::detect_deref_type(process, mono_range)?,
     };
     asr::print_message(&format!("deref_type: {:?}", deref_type));
+
+    let mono_assembly_foreach_address = match format {
+        BinaryFormat::PE => {
+            pe::symbols(process, mono_range.0)
+                .find(|symbol| {
+                    symbol
+                        .get_name::<25>(process)
+                        .is_ok_and(|name| name.matches("mono_assembly_foreach"))
+                })?
+                .address
+        },
+        BinaryFormat::ELF => {
+            let mono_bytes = file_read_all_bytes(mono_path).ok()?;
+            elf::get_function_address(process, mono_range, &mono_bytes, b"mono_assembly_foreach")?
+        },
+        BinaryFormat::MachO => {
+            let mono_bytes = file_read_all_bytes(mono_path).ok()?;
+            macho::get_function_address(process, mono_range, &mono_bytes, b"_mono_assembly_foreach")?
+        }
+    };
+    asr::print_message(&format!("mono_assembly_foreach_address: {}", mono_assembly_foreach_address));
 
     let module = Module::wait_attach_auto_detect(&process).await;
     let image = module.wait_get_default_image(&process).await;
