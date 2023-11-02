@@ -1,8 +1,15 @@
+mod binary_format;
+mod file;
+
+use std::process;
+
 use asr::{
     future::{next_tick, retry},
     game_engine::unity::mono::Module,
     Process,
 };
+
+use binary_format::*;
 
 asr::async_main!(stable);
 
@@ -34,15 +41,31 @@ async fn main() {
         }).await;
         process
             .until_closes(async {
-                let module = Module::wait_attach_auto_detect(&process).await;
-                let image = module.wait_get_default_image(&process).await;
-
-                // TODO: Load some initial information from the process.
+                match option_main(&process).await {
+                    None => {
+                        asr::print_message("option_main exit None");
+                    },
+                    Some(()) => {
+                        asr::print_message("option_main exit Some(())");
+                    }
+                }
                 loop {
-                    // TODO: Do something on every tick.
                     next_tick().await;
                 }
             })
             .await;
+    }
+}
+
+async fn option_main(process: &Process) -> Option<()> {
+    let format = process_detect_binary_format(&process)?;
+    asr::print_message(&format!("binary format: {:?}", format));
+    let module = Module::wait_attach_auto_detect(&process).await;
+    let image = module.wait_get_default_image(&process).await;
+
+    // TODO: Load some initial information from the process.
+    loop {
+        // TODO: Do something on every tick.
+        next_tick().await;
     }
 }
