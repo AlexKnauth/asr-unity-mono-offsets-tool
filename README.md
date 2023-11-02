@@ -1,6 +1,6 @@
 # asr-unity-mono-offsets-tool
 
-An auto splitter for Hollow Knight.
+A tool for finding which Unity / Mono offsets work and which don't work.
 
 ## Compilation
 
