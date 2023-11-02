@@ -1,7 +1,6 @@
 mod binary_format;
 mod file;
-
-use std::process;
+mod file_format;
 
 use asr::{
     future::{next_tick, retry},
@@ -78,6 +77,14 @@ async fn option_main(process: &Process) -> Option<()> {
     asr::print_message(&format!("mono_name: {}", mono_name));
     asr::print_message(&format!("mono_path: {}", mono_path));
     assert_eq!(path_detect_binary_format(&mono_path), Some(format));
+
+    let deref_type = match format {
+        BinaryFormat::PE => file_format::pe::detect_deref_type(process, mono_range)?,
+        BinaryFormat::ELF => file_format::elf::detect_deref_type(process, mono_range)?,
+        BinaryFormat::MachO => file_format::macho::detect_deref_type(process, mono_range)?,
+    };
+    asr::print_message(&format!("deref_type: {:?}", deref_type));
+
     let module = Module::wait_attach_auto_detect(&process).await;
     let image = module.wait_get_default_image(&process).await;
 

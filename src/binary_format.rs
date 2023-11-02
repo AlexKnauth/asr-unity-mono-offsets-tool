@@ -13,6 +13,16 @@ pub enum BinaryFormat {
     MachO,
 }
 
+/// Describes the pointer size that should be used while deferecencing a pointer path
+#[derive(Copy, Clone, Default, Debug)]
+pub enum DerefType {
+    /// 4-byte pointer size, used in 32bit processes
+    Bit32,
+    /// 8-byte pointer size, used in 64bit processes
+    #[default]
+    Bit64,
+}
+
 // --------------------------------------------------------
 
 pub fn process_detect_binary_format(process: &Process) -> Option<BinaryFormat> {
