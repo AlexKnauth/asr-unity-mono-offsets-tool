@@ -201,6 +201,34 @@ async fn option_main(process: &Process) -> Option<()> {
     let default_image = read_pointer(process, deref_type, default_assembly + monoassembly_image).ok()?;
     asr::print_message(&format!("default_image: {}", default_image));
 
+    // Hard to guess both monoimage_class_cache and monointernalhashtable_size at the same time.
+    // So make an assumption about monointernalhashtable_size based on 64-bit vs 32-bit.
+    let monointernalhashtable_size = match deref_type {
+        DerefType::Bit32 => 0xC,
+        DerefType::Bit64 => 0x18,
+    };
+    asr::print_message(&format!("Offsets monointernalhashtable_size: 0x{:X?}, from {:?}", monointernalhashtable_size, deref_type));
+    // Also make an assumption about monointernalhashtable_table based on 64-bit vs 32-bit.
+    let monointernalhashtable_table = match deref_type {
+        DerefType::Bit32 => 0x14,
+        DerefType::Bit64 => 0x20,
+    };
+    asr::print_message(&format!("Offsets monointernalhashtable_table: 0x{:X?}, from {:?}", monointernalhashtable_table, deref_type));
+
+    let monoimage_class_cache = [0x2A0, 0x354, 0x35C, 0x3D0, 0x4C0, 0x4D0].into_iter().max_by_key(|&monoimage_class_cache| {
+        monoimage_class_cache_score(process, deref_type, default_image, monoimage_class_cache, monointernalhashtable_size, monointernalhashtable_table)
+    })?;
+    let class_cache_score = monoimage_class_cache_score(process, deref_type, default_image, monoimage_class_cache, monointernalhashtable_size, monointernalhashtable_table);
+    asr::print_message(&format!("monoimage_class_cache: 0x{:X?}, class_cache_score: {}", monoimage_class_cache, class_cache_score));
+    let class_cache_size = process.read::<i32>(default_image + monoimage_class_cache + monointernalhashtable_size).ok()?;
+    asr::print_message(&format!("class_cache_size: {}", class_cache_size));
+    let table_addr = read_pointer(process, deref_type, default_image + monoimage_class_cache + monointernalhashtable_table).ok()?;
+    asr::print_message(&format!("table_addr: {}", table_addr));
+    let table = read_pointer(process, deref_type, table_addr).ok()?;
+    asr::print_message(&format!("table: {}", table));
+    let class = read_pointer(process, deref_type, table).ok()?;
+    asr::print_message(&format!("class: {}", class));
+
     let module = Module::wait_attach_auto_detect(&process).await;
     let image = module.wait_get_default_image(&process).await;
 
@@ -241,4 +269,31 @@ fn address_image_score(process: &Process, deref_type: DerefType, address: Addres
     if image.value() < 0x1000 { return 3; }
     if process.read::<u8>(image).is_err() { return 4; };
     5
+}
+
+fn monoimage_class_cache_score(
+    process: &Process,
+    deref_type: DerefType,
+    image: Address,
+    monoimage_class_cache: i32,
+    monointernalhashtable_size: i32,
+    monointernalhashtable_table: i32,
+) -> i32 {
+    let Ok(class_cache_size) = process.read::<i32>(image + monoimage_class_cache + monointernalhashtable_size) else {
+        return 0;
+    };
+    if class_cache_size <= 0 { return 1; }
+    if 0x10000 <= class_cache_size { return 2; }
+    let Ok(table_addr) = read_pointer(process, deref_type, image + monoimage_class_cache + monointernalhashtable_table) else {
+        return 3;
+    };
+    let Ok(table) = read_pointer(process, deref_type, table_addr) else {
+        return 4;
+    };
+    let Ok(class) = read_pointer(process, deref_type, table) else {
+        return 5;
+    };
+    if process.read::<u8>(class).is_err() { return 6; }
+    if class != table { return 7; }
+    8
 }
