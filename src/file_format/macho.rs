@@ -62,16 +62,6 @@ pub fn scan_macho_page(process: &Process, range: (Address, u64)) -> Option<Addre
     None
 }
 
-/// Determines whether a MachO header at the address is 64-bit or 32-bit
-pub fn is_64_bit(process: &Process, address: Address) -> Option<bool> {
-    let magic: u32 = process.read(address).ok()?;
-    match magic {
-        MH_MAGIC_64 | MH_CIGAM_64 => Some(true),
-        MH_MAGIC_32 | MH_CIGAM_32 => Some(false),
-        _ => None
-    }
-}
-
 pub fn detect_deref_type(process: &Process, module_range: (Address, u64)) -> Option<DerefType> {
     let magic_address = scan_macho_page(process, module_range)?;
     let magic: u32 = process.read(magic_address).ok()?;

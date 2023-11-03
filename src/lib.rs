@@ -6,7 +6,6 @@ mod file_format;
 
 use asr::{
     future::{next_tick, retry},
-    game_engine::unity::mono::Module,
     Process, file_format::pe, Address, Address32, signature::Signature, Address64, string::ArrayCString,
 };
 
@@ -258,9 +257,6 @@ async fn option_main(process: &Process) -> Option<()> {
     if next_class_cache_score < 12 {
         asr::print_message("BAD: next_class_cache_score is not at maximum");
     }
-
-    let module = Module::wait_attach_auto_detect(&process).await;
-    let image = module.wait_get_default_image(&process).await;
 
     // TODO: Load some initial information from the process.
     loop {
