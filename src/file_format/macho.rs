@@ -91,12 +91,12 @@ pub fn get_function_address(process: &Process, range: (Address, u64), macho_byte
     asr::print_message("macho get_function_address: before scan_macho_page");
     let function_address = scan_macho_page(process, range)? + function_offset;
     asr::print_message(&format!("macho get_function_address: function_address: {}", function_address));
-    let actual: [u8; 0x17] = process.read(function_address).ok()?;
-    let expected: [u8; 0x17] = slice_read(&macho_bytes, function_offset as usize).ok()?;
+    let actual: [u8; 0x100] = process.read(function_address).ok()?;
+    let expected: [u8; 0x100] = slice_read(&macho_bytes, function_offset as usize).ok()?;
     asr::print_message("macho get_function_address: before actual vs expected");
     if actual != expected {
         asr::print_message("BAD: actual != expected");
-        let signature: Signature<0x17> = Signature::Simple(expected);
+        let signature: Signature<0x100> = Signature::Simple(expected);
         let function_address_2 = signature.scan_process_range(process, range)?;
         asr::print_message(&format!("macho get_function_address: function_address_2: {}", function_address_2));
         return Some(function_address_2);
