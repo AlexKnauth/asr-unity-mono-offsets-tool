@@ -229,6 +229,11 @@ async fn option_main(process: &Process) -> Option<()> {
     let class = read_pointer(process, deref_type, table).ok()?;
     asr::print_message(&format!("class: {}", class));
 
+    // Plan:
+    //  * Find some class-related offsets first.
+    //  * Then go back and find monoclassdef_next_class_cache,
+    //    using the class-related offsets to score that.
+
     let module = Module::wait_attach_auto_detect(&process).await;
     let image = module.wait_get_default_image(&process).await;
 
