@@ -4,7 +4,7 @@ mod file_format;
 
 use asr::{
     future::{next_tick, retry},
-    game_engine::unity::mono::Module,
+    game_engine::unity::mono::{Module, self},
     Process, file_format::pe, Address, Address32, signature::Signature, Address64, string::ArrayCString,
 };
 
@@ -163,13 +163,35 @@ async fn option_main(process: &Process) -> Option<()> {
     })?;
     let aname_score = address_aname_score(process, deref_type, first_assembly_data + monoassembly_aname);
     asr::print_message(&format!("Offsets monoassembly_aname: 0x{:X?}, aname_score: {}", monoassembly_aname, aname_score));
-    if let Ok(aname) = read_pointer(process, deref_type, first_assembly_data + monoassembly_aname) {
-        if let Ok(name_cstr) = process.read::<ArrayCString<CSTR>>(aname) {
-            if let Ok(name_str) = std::str::from_utf8(&name_cstr) {
-                asr::print_message(&format!("name_str: {}", name_str));
-            }
-        }
+    if let Some(name_str) = monoassembly_aname_string(process, deref_type, first_assembly_data, monoassembly_aname) {
+        asr::print_message(&format!("name_str: {}", name_str));
     }
+
+    let mut assembly = assemblies;
+    let default_assembly = loop {
+        let [data, next_assembly]: [Address; 2] = match deref_type {
+            DerefType::Bit64 => process
+                .read::<[Address64; 2]>(assembly)
+                .ok()?
+                .map(|item| item.into()),
+            DerefType::Bit32 => process
+                .read::<[Address32; 2]>(assembly)
+                .ok()?
+                .map(|item| item.into()),
+        };
+
+        if monoassembly_aname_string(process, deref_type, data, monoassembly_aname).as_deref() == Some("Assembly-CSharp") {
+            asr::print_message("found Assembly-CSharp");
+            break data;
+        }
+        
+        if next_assembly.is_null() {
+            return None;
+        } else {
+            assembly = next_assembly;
+        }
+    };
+    asr::print_message(&format!("default_assembly: {}", default_assembly));
 
     let module = Module::wait_attach_auto_detect(&process).await;
     let image = module.wait_get_default_image(&process).await;
@@ -195,4 +217,11 @@ fn address_aname_score(process: &Process, deref_type: DerefType, address: Addres
     if name_str.is_empty() { return 3; }
     if name_str.contains("/") || name_str.contains("\\") { return 4; }
     5
+}
+
+fn monoassembly_aname_string(process: &Process, deref_type: DerefType, address: Address, monoassembly_aname: i32) -> Option<String> {
+    let address_aname = address + monoassembly_aname;
+    let aname = read_pointer(process, deref_type, address_aname).ok()?;
+    let name_cstr = process.read::<ArrayCString<CSTR>>(aname).ok()?;
+    String::from_utf8(name_cstr.to_vec()).ok()
 }
