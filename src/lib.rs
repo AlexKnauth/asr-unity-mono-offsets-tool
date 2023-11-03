@@ -193,6 +193,14 @@ async fn option_main(process: &Process) -> Option<()> {
     };
     asr::print_message(&format!("default_assembly: {}", default_assembly));
 
+    let monoassembly_image = [0x40, 0x44, 0x48, 0x58, 0x60].into_iter().max_by_key(|&monoassembly_image| {
+        address_image_score(process, deref_type, default_assembly + monoassembly_image)
+    })?;
+    let image_score = address_image_score(process, deref_type, default_assembly + monoassembly_image);
+    asr::print_message(&format!("Offsets monoassembly_image: 0x{:X?}, image_score: {}", monoassembly_image, image_score));
+    let default_image = read_pointer(process, deref_type, default_assembly + monoassembly_image).ok()?;
+    asr::print_message(&format!("default_image: {}", default_image));
+
     let module = Module::wait_attach_auto_detect(&process).await;
     let image = module.wait_get_default_image(&process).await;
 
@@ -224,4 +232,13 @@ fn monoassembly_aname_string(process: &Process, deref_type: DerefType, address: 
     let aname = read_pointer(process, deref_type, address_aname).ok()?;
     let name_cstr = process.read::<ArrayCString<CSTR>>(aname).ok()?;
     String::from_utf8(name_cstr.to_vec()).ok()
+}
+
+fn address_image_score(process: &Process, deref_type: DerefType, address: Address) -> i32 {
+    let Ok(image) = read_pointer(process, deref_type, address) else { return 0;};
+    if image.is_null() { return 1; }
+    if image.value() < 0x10 { return 2; }
+    if image.value() < 0x1000 { return 3; }
+    if process.read::<u8>(image).is_err() { return 4; };
+    5
 }
