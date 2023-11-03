@@ -5,7 +5,7 @@ mod file_format;
 use asr::{
     future::{next_tick, retry},
     game_engine::unity::mono::Module,
-    Process, file_format::pe, Address, Address32, signature::Signature, Address64,
+    Process, file_format::pe, Address, Address32, signature::Signature, Address64, string::ArrayCString,
 };
 
 use binary_format::*;
@@ -15,6 +15,8 @@ use crate::{file::file_read_all_bytes, file_format::{elf, macho}};
 asr::async_main!(stable);
 
 // --------------------------------------------------------
+
+const CSTR: usize = 128;
 
 const PROCESS_NAMES: [&str; 7] = [
     "Hollow Knight",
@@ -156,6 +158,32 @@ async fn option_main(process: &Process) -> Option<()> {
     };
     asr::print_message(&format!("assemblies: {}", assemblies));
 
+    let mut assembly = assemblies;
+    let [data, next_assembly]: [Address; 2] = match deref_type {
+        DerefType::Bit64 => process
+            .read::<[Address64; 2]>(assembly)
+            .ok()?
+            .map(|item| item.into()),
+        DerefType::Bit32 => process
+            .read::<[Address32; 2]>(assembly)
+            .ok()?
+            .map(|item| item.into()),
+    };
+    asr::print_message(&format!("data: {}", data));
+
+    let monoassembly_aname = [0x8, 0x10].into_iter().max_by_key(|&monoassembly_aname| {
+        address_aname_score(process, deref_type, data + monoassembly_aname)
+    })?;
+    let aname_score = address_aname_score(process, deref_type, data + monoassembly_aname);
+    asr::print_message(&format!("Offsets monoassembly_aname: 0x{:X?}, aname_score: {}", monoassembly_aname, aname_score));
+    if let Ok(aname) = read_pointer(process, deref_type, data + monoassembly_aname) {
+        if let Ok(name_cstr) = process.read::<ArrayCString<CSTR>>(aname) {
+            if let Ok(name_str) = std::str::from_utf8(&name_cstr) {
+                asr::print_message(&format!("name_str: {}", name_str));
+            }
+        }
+    }
+
     let module = Module::wait_attach_auto_detect(&process).await;
     let image = module.wait_get_default_image(&process).await;
 
@@ -164,4 +192,20 @@ async fn option_main(process: &Process) -> Option<()> {
         // TODO: Do something on every tick.
         next_tick().await;
     }
+}
+
+fn read_pointer(process: &Process, deref_type: DerefType, address: Address) -> Result<Address, asr::Error> {
+    Ok(match deref_type {
+        DerefType::Bit64 => process.read::<Address64>(address)?.into(),
+        DerefType::Bit32 => process.read::<Address32>(address)?.into(),
+    })
+}
+
+fn address_aname_score(process: &Process, deref_type: DerefType, address: Address) -> i32 {
+    let Ok(aname) = read_pointer(process, deref_type, address) else { return 0; };
+    let Ok(name_cstr) = process.read::<ArrayCString<CSTR>>(aname) else { return 1; };
+    let Ok(name_str) = std::str::from_utf8(&name_cstr) else { return 2; };
+    if name_str.is_empty() { return 3; }
+    if name_str.contains("/") || name_str.contains("\\") { return 4; }
+    5
 }
