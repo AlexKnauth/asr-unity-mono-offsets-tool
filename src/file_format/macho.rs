@@ -1,6 +1,6 @@
 //! Support for parsing MachO files
 
-use asr::{Process, Address};
+use asr::{Process, Address, signature::Signature};
 
 use core::mem;
 
@@ -85,11 +85,22 @@ pub fn detect_deref_type(process: &Process, module_range: (Address, u64)) -> Opt
 
 /// Finds the address of a function from a MachO module range and file contents.
 pub fn get_function_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
+    asr::print_message("macho get_function_address: before get_function_offset");
     let function_offset: u32 = get_function_offset(&macho_bytes, function_name)?;
+    asr::print_message(&format!("macho get_function_address: function_offset: 0x{:X?}", function_offset));
+    asr::print_message("macho get_function_address: before scan_macho_page");
     let function_address = scan_macho_page(process, range)? + function_offset;
-    let actual: [u8; 0x100] = process.read(function_address).ok()?;
-    let expected: [u8; 0x100] = slice_read(&macho_bytes, function_offset as usize).ok()?;
-    if actual != expected { return None; }
+    asr::print_message(&format!("macho get_function_address: function_address: {}", function_address));
+    let actual: [u8; 0x17] = process.read(function_address).ok()?;
+    let expected: [u8; 0x17] = slice_read(&macho_bytes, function_offset as usize).ok()?;
+    asr::print_message("macho get_function_address: before actual vs expected");
+    if actual != expected {
+        asr::print_message("BAD: actual != expected");
+        let signature: Signature<0x17> = Signature::Simple(expected);
+        let function_address_2 = signature.scan_process_range(process, range)?;
+        asr::print_message(&format!("macho get_function_address: function_address_2: {}", function_address_2));
+        return Some(function_address_2);
+    }
     Some(function_address)
 }
 
