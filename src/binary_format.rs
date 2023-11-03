@@ -23,6 +23,15 @@ pub enum DerefType {
     Bit64,
 }
 
+impl DerefType {
+    pub fn size_of_ptr(&self) -> u64 {
+        match self {
+            DerefType::Bit64 => 8,
+            DerefType::Bit32 => 4,
+        }
+    }
+}
+
 // --------------------------------------------------------
 
 pub fn process_detect_binary_format(process: &Process) -> Option<BinaryFormat> {

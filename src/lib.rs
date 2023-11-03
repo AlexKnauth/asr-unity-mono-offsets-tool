@@ -1,16 +1,20 @@
+extern crate alloc;
+
 mod binary_format;
 mod file;
 mod file_format;
 
 use asr::{
     future::{next_tick, retry},
-    game_engine::unity::mono::{Module, self},
+    game_engine::unity::mono::Module,
     Process, file_format::pe, Address, Address32, signature::Signature, Address64, string::ArrayCString,
 };
 
 use binary_format::*;
 
 use crate::{file::file_read_all_bytes, file_format::{elf, macho}};
+
+use alloc::collections::BTreeSet;
 
 asr::async_main!(stable);
 
@@ -234,6 +238,22 @@ async fn option_main(process: &Process) -> Option<()> {
     //  * Then go back and find monoclassdef_next_class_cache,
     //    using the class-related offsets to score that.
 
+    // Hard to guess both monoclassdef_klass and monoclass_name at the same time.
+    // But monoclassdef_klass seems to always be 0 anyway.
+    let monoclassdef_klass = 0x0;
+    asr::print_message(&format!("Offsets monoclassdef_klass: 0x{:X?}, ASSUMED", monoclassdef_klass));
+    let (monoclass_name, monoclass_name_space) = [(0x2C, 0x30), (0x30, 0x34), (0x40, 0x48), (0x48, 0x50)].into_iter().max_by_key(|&(monoclass_name, monoclass_name_space)| {
+        monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space)
+    })?;
+    let class_name_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
+    asr::print_message(&format!("Offsets monoclass_name: 0x{:X?}, class_name_score: {}", monoclass_name, class_name_score));
+
+    let monoclassdef_next_class_cache = [0xA0, 0xA8, 0x100, 0x108].into_iter().max_by_key(|&monoclassdef_next_class_cache| {
+        monoclassdef_next_class_cache_score(process, deref_type, table_addr, class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name, monoclass_name_space);
+    })?;
+    let next_class_cache_score = monoclassdef_next_class_cache_score(process, deref_type, table_addr, class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name, monoclass_name_space);
+    asr::print_message(&format!("Offsets monoclassdef_next_class_cache: 0x{:X?}, next_class_cache_score: {}", monoclassdef_next_class_cache, next_class_cache_score));
+
     let module = Module::wait_attach_auto_detect(&process).await;
     let image = module.wait_get_default_image(&process).await;
 
@@ -301,4 +321,67 @@ fn monoimage_class_cache_score(
     if process.read::<u8>(class).is_err() { return 6; }
     if class != table { return 7; }
     8
+}
+
+fn monoclass_name_score(
+    process: &Process,
+    deref_type: DerefType,
+    class: Address,
+    monoclassdef_klass: i32,
+    monoclass_name: i32,
+    monoclass_name_space: i32,
+) -> i32 {
+    let Ok(name_ptr) = read_pointer(process, deref_type, class + monoclassdef_klass + monoclass_name) else {
+        return 0;
+    };
+    let Ok(space_ptr) = read_pointer(process, deref_type, class + monoclassdef_klass + monoclass_name_space) else {
+        return 1;
+    };
+    let Ok(name_cstr) = process.read::<ArrayCString<CSTR>>(name_ptr) else {
+        return 2;
+    };
+    let Ok(space_cstr) = process.read::<ArrayCString<CSTR>>(space_ptr) else {
+        return 3;
+    };
+    let Ok(name_str) = std::str::from_utf8(&name_cstr) else {
+        return 4;
+    };
+    if std::str::from_utf8(&space_cstr).is_err() { return 5; };
+    if name_str.is_empty() { return 6; }
+    // it's okay for the space to be an empty string,
+    // but it's not okay for it to not be valid utf8
+    7
+}
+
+fn monoclassdef_next_class_cache_score(
+    process: &Process,
+    deref_type: DerefType,
+    table_addr: Address,
+    class_cache_size: i32,
+    monoclassdef_klass: i32,
+    monoclassdef_next_class_cache: i32,
+    monoclass_name: i32,
+    monoclass_name_space: i32,
+) -> i32 {
+    for i in 0..class_cache_size {
+        let table_addr_i = table_addr + (i as u64).wrapping_mul(deref_type.size_of_ptr());
+        let Ok(table1) = read_pointer(process, deref_type, table_addr_i) else {
+            return 0;
+        };
+        let mut table = table1;
+        let mut seen = BTreeSet::new();
+        while !table.is_null() {
+            if seen.replace(table).is_some() { return 11; }
+            let Ok(class) = read_pointer(process, deref_type, table) else {
+                return 1;
+            };
+            let class_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
+            if class_score < 7 { return 2 + class_score; }
+            let Ok(table2) = read_pointer(process, deref_type, table + monoclassdef_next_class_cache) else {
+                return 10;
+            };
+            table = table2;
+        }
+    }
+    12
 }
