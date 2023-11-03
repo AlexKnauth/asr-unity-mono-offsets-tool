@@ -253,6 +253,9 @@ async fn option_main(process: &Process) -> Option<()> {
     })?;
     let next_class_cache_score = monoclassdef_next_class_cache_score(process, deref_type, table_addr, class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name, monoclass_name_space);
     asr::print_message(&format!("Offsets monoclassdef_next_class_cache: 0x{:X?}, next_class_cache_score: {}", monoclassdef_next_class_cache, next_class_cache_score));
+    if next_class_cache_score < 12 {
+        asr::print_message("BAD: next_class_cache_score is not at maximum");
+    }
 
     let module = Module::wait_attach_auto_detect(&process).await;
     let image = module.wait_get_default_image(&process).await;
