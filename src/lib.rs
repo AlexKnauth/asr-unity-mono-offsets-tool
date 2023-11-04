@@ -8,7 +8,7 @@ use std::iter;
 
 use asr::{
     future::{next_tick, retry},
-    Process, file_format::pe, Address, Address32, signature::Signature, Address64, string::ArrayCString,
+    Process, file_format::pe, Address, Address32, signature::Signature, Address64, string::ArrayCString, game_engine::unity::mono,
 };
 
 use binary_format::*;
@@ -40,6 +40,12 @@ const MONO_NAMES: [&str; 6] = [
     "libmonobdwgc-2.0.so",
     "mono-2.0-bdwgc.dll",
     "mono.dll",
+];
+
+const UNITY_PLAYER_NAMES: [&str; 3] = [
+    "UnityPlayer.dll",
+    "UnityPlayer.so",
+    "UnityPlayer.dylib",
 ];
 
 // --------------------------------------------------------
@@ -97,6 +103,9 @@ async fn option_main(process: &Process) -> Option<()> {
         BinaryFormat::MachO => file_format::macho::detect_deref_type(process, mono_range)?,
     };
     asr::print_message(&format!("deref_type: {:?}", deref_type));
+
+    let version = detect_version(process, mono_name)?;
+    asr::print_message(&format!("version: {:?}", version));
 
     let mono_assembly_foreach_address = match format {
         BinaryFormat::PE => {
@@ -393,6 +402,53 @@ fn read_pointer(process: &Process, deref_type: DerefType, address: Address) -> R
         DerefType::Bit32 => process.read::<Address32>(address)?.into(),
     })
 }
+
+fn detect_version(process: &Process, mono_name: &str) -> Option<mono::Version> {
+    if ["libmono.0.dylib", "libmono.so", "mono.dll"].contains(&mono_name) {
+        return Some(mono::Version::V1);
+    }
+
+    let unity_range = UNITY_PLAYER_NAMES.into_iter().find_map(|name| {
+        process.get_module_range(name).ok()
+    })?;
+
+    // null "202" wildcard "."
+    const SIG_202X: Signature<6> = Signature::new("00 32 30 32 ?? 2E");
+
+    let Some(addr) = SIG_202X.scan_process_range(process, unity_range) else {
+        return Some(mono::Version::V2);
+    };
+
+    let version_string = process.read::<[u8; 6]>(addr + 1).ok()?;
+
+    let (before, after) = version_string.split_at(version_string.iter().position(|&x| x == b'.')?);
+
+    let unity: u32 = ascii_read_u32(before);
+
+    let unity_minor: u32 = ascii_read_u32(&after[1..]);
+    
+    Some(if (unity == 2021 && unity_minor >= 2) || (unity > 2021) {
+        mono::Version::V3
+    } else {
+        mono::Version::V2
+    })
+}
+
+fn ascii_read_u32(slice: &[u8]) -> u32 {
+    const ZERO: u8 = b'0';
+    const NINE: u8 = b'9';
+
+    let mut result: u32 = 0;
+    for &val in slice {
+        match val {
+            ZERO..=NINE => result = result * 10 + (val - ZERO) as u32,
+            _ => break,
+        }
+    }
+    result
+}
+
+// --------------------------------------------------------
 
 fn address_aname_score(process: &Process, deref_type: DerefType, address: Address) -> i32 {
     let Ok(aname) = read_pointer(process, deref_type, address) else { return 0; };
