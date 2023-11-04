@@ -261,6 +261,12 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message("BAD: next_class_cache_score is not at maximum");
     }
 
+    let monoclassdef_field_count = [0x64, 0x94, 0x9C, 0xA4, 0xF0, 0xF8, 0x100].into_iter().max_by_key(|&monoclassdef_field_count| {
+        let field_count_score = monoclassdef_field_count_score(process, deref_type, class, monoclassdef_field_count, monoclassdef_next_class_cache);
+        asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
+        field_count_score
+    })?;
+
     // TODO: Load some initial information from the process.
     loop {
         // TODO: Do something on every tick.
@@ -390,4 +396,20 @@ fn monoclassdef_next_class_cache_score(
         }
     }
     12
+}
+
+fn monoclassdef_field_count_score(
+    process: &Process,
+    _deref_type: DerefType,
+    class: Address,
+    monoclassdef_field_count: i32,
+    monoclassdef_next_class_cache: i32,
+) -> i32 {
+    if monoclassdef_next_class_cache <= monoclassdef_field_count { return 0; }
+    let Ok(field_count) = process.read::<u32>(class + monoclassdef_field_count) else {
+        return 1;
+    };
+    asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count: {}", monoclassdef_field_count, field_count));
+    // TODO: a better way of telling when something isn't the correct field count
+    2
 }
