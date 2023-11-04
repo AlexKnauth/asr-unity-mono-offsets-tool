@@ -360,6 +360,21 @@ async fn option_main(process: &Process) -> Option<()> {
     };
     asr::print_message(&format!("Offsets monoclassruntimeinfo_domain_vtables: 0x{:X?}, from {:?}", monoclassruntimeinfo_domain_vtables, deref_type));
 
+    let monoclass_runtime_info = [0x7C, 0x84, 0xA4, 0xC8, 0xD0, 0xF8].into_iter().max_by_key(|&monoclass_runtime_info| {
+        let runtime_info_score: i32 = default_classes.iter().map(|&c| {
+            monoclass_runtime_info_score(process, deref_type, c, monoclass_runtime_info, monoclassdef_klass, monoclassruntimeinfo_domain_vtables)
+        }).sum();
+        asr::print_message(&format!("monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
+        runtime_info_score
+    })?;
+    let runtime_info_score: i32 = default_classes.iter().map(|&c| {
+        monoclass_runtime_info_score(process, deref_type, c, monoclass_runtime_info, monoclassdef_klass, monoclassruntimeinfo_domain_vtables)
+    }).sum();
+    asr::print_message(&format!("Offsets monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
+    if runtime_info_score < 3 * default_classes.len() as i32 {
+        asr::print_message(&format!("BAD runtime_info_score: {} vs {}", runtime_info_score, 3 * default_classes.len()));
+    }
+
     // TODO get_static_table:
     //   monoclass_runtime_info
     //   monoclass_vtable_size
@@ -562,6 +577,19 @@ fn monoclass_parent_score(process: &Process, deref_type: DerefType, c: Address, 
         return 2;
     }
     4
+}
+
+fn monoclass_runtime_info_score(process: &Process, deref_type: DerefType, c: Address, monoclass_runtime_info: i32, monoclassdef_klass: i32, monoclassruntimeinfo_domain_vtables: i32) -> i32 {
+    let Ok(runtime_info) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_runtime_info) else {
+        return 0;
+    };
+    let Ok(vtables) = read_pointer(process, deref_type, runtime_info + monoclassruntimeinfo_domain_vtables) else {
+        return 1;
+    };
+    if process.read::<u8>(vtables).is_err() {
+        return 2;
+    }
+    3
 }
 
 // --------------------------------------------------------
