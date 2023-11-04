@@ -333,6 +333,15 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message("BAD: fields_score is not at maximum");
     }
 
+    // TODO get_parent:
+    //   monoclass_parent
+
+    // TODO get_static_table:
+    //   monoclass_runtime_info
+    //   monoclassruntimeinfo_domain_vtables
+    //   monoclass_vtable_size
+    //   monovtable_vtable
+
     // TODO: Load some initial information from the process.
     loop {
         // TODO: Do something on every tick.
