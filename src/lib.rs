@@ -251,18 +251,12 @@ async fn option_main(process: &Process) -> Option<()> {
 
     // expect class_int32 to have 3 fields
     let map_name_field_counts: BTreeMap<&str, u32> = BTreeMap::from([
-        ("Boolean", 7),
         ("Byte", 3),
-        ("Char", 9),
-        ("Enum", 2),
         ("Guid", 15),
         ("Int32", 3),
         ("SByte", 3),
-        ("Single", 7),
-        ("String", 8),
         ("UInt32", 3),
         ("UnSafeCharBuffer", 3),
-        ("Version", 6),
     ]);
     let mut map_name_class_field_counts: BTreeMap<&str, (Address, u32)> = BTreeMap::new();
     for class in classes_iter(process, deref_type, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_next_class_cache) {
