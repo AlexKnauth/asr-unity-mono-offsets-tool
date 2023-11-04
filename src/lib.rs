@@ -247,7 +247,7 @@ async fn option_main(process: &Process) -> Option<()> {
         class_name(process, deref_type, class, monoclassdef_klass, monoclass_name).as_deref() == Some("Int32")
     })?;
 
-    let monoclassdef_field_count = [0x64, 0x94, 0x9C, 0xA4, 0xF0, 0xF8, 0x100].into_iter().max_by_key(|&monoclassdef_field_count| {
+    let monoclassdef_field_count = [0x64, 0x8C, 0x94, 0x9C, 0xA4, 0xF0, 0xF8, 0x100].into_iter().max_by_key(|&monoclassdef_field_count| {
         let field_count_score = monoclassdef_field_count_score(process, deref_type, class_int32, 3, monoclassdef_field_count, monoclassdef_next_class_cache);
         asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
         field_count_score
