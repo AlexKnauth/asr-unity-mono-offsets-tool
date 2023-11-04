@@ -164,7 +164,7 @@ async fn option_main(process: &Process) -> Option<()> {
     asr::print_message(&format!("assemblies: {}", assemblies));
 
     let first_assembly_data = read_pointer(process, deref_type, assemblies).ok()?;
-    asr::print_message(&format!("first_assembly_data: {}", first_assembly_data));
+    // asr::print_message(&format!("first_assembly_data: {}", first_assembly_data));
 
     let monoassembly_aname = [0x8, 0x10].into_iter().max_by_key(|&monoassembly_aname| {
         address_aname_score(process, deref_type, first_assembly_data + monoassembly_aname)
@@ -178,7 +178,7 @@ async fn option_main(process: &Process) -> Option<()> {
     let default_assembly = assemblies_iter(process, deref_type, assemblies).find(|&assembly| {
         monoassembly_aname_string(process, deref_type, assembly, monoassembly_aname).as_deref() == Some("Assembly-CSharp")
     })?;
-    asr::print_message(&format!("default_assembly: {}", default_assembly));
+    // asr::print_message(&format!("default_assembly: {}", default_assembly));
 
     let monoassembly_image = [0x40, 0x44, 0x48, 0x58, 0x60].into_iter().max_by_key(|&monoassembly_image| {
         address_image_score(process, deref_type, default_assembly + monoassembly_image)
@@ -186,7 +186,7 @@ async fn option_main(process: &Process) -> Option<()> {
     let image_score = address_image_score(process, deref_type, default_assembly + monoassembly_image);
     asr::print_message(&format!("Offsets monoassembly_image: 0x{:X?}, image_score: {}", monoassembly_image, image_score));
     let default_image = read_pointer(process, deref_type, default_assembly + monoassembly_image).ok()?;
-    asr::print_message(&format!("default_image: {}", default_image));
+    // asr::print_message(&format!("default_image: {}", default_image));
 
     // Hard to guess both monoimage_class_cache and monointernalhashtable_size at the same time.
     // So make an assumption about monointernalhashtable_size based on 64-bit vs 32-bit.
@@ -208,13 +208,13 @@ async fn option_main(process: &Process) -> Option<()> {
     let class_cache_score = monoimage_class_cache_score(process, deref_type, default_image, monoimage_class_cache, monointernalhashtable_size, monointernalhashtable_table);
     asr::print_message(&format!("Offsets monoimage_class_cache: 0x{:X?}, class_cache_score: {}", monoimage_class_cache, class_cache_score));
     let class_cache_size = process.read::<i32>(default_image + monoimage_class_cache + monointernalhashtable_size).ok()?;
-    asr::print_message(&format!("class_cache_size: {}", class_cache_size));
+    // asr::print_message(&format!("class_cache_size: {}", class_cache_size));
     let table_addr = read_pointer(process, deref_type, default_image + monoimage_class_cache + monointernalhashtable_table).ok()?;
-    asr::print_message(&format!("table_addr: {}", table_addr));
+    // asr::print_message(&format!("table_addr: {}", table_addr));
     let table = read_pointer(process, deref_type, table_addr).ok()?;
-    asr::print_message(&format!("table: {}", table));
+    // asr::print_message(&format!("table: {}", table));
     let class = read_pointer(process, deref_type, table).ok()?;
-    asr::print_message(&format!("class: {}", class));
+    // asr::print_message(&format!("class: {}", class));
 
     // Plan:
     //  * Find some class-related offsets first.
@@ -308,7 +308,7 @@ async fn option_main(process: &Process) -> Option<()> {
             let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1);
             monoclass_fields_score(process, deref_type, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
         }).sum();
-        asr::print_message(&format!("monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
+        // asr::print_message(&format!("monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
         fields_score
     })?;
     let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1)| {
