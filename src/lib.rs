@@ -333,8 +333,25 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message("BAD: fields_score is not at maximum");
     }
 
-    // TODO get_parent:
+    let default_classes: BTreeSet<Address> = classes_iter(process, deref_type, table_addr, class_cache_size, monoclassdef_next_class_cache).collect();
+
     //   monoclass_parent
+    let monoclass_parent = [0x20, 0x24, 0x28, 0x30].into_iter().max_by_key(|&monoclass_parent| {
+        let parent_score: i32 = default_classes.iter().map(|&c| {
+            monoclass_parent_score(process, deref_type, c, monoclass_parent, monoclassdef_klass, monoclass_name)
+        }).sum();
+        asr::print_message(&format!("monoclass_parent: 0x{:X?}, parent_score: {}", monoclass_parent, parent_score));
+        parent_score
+    })?;
+    let parent_score: i32 = default_classes.iter().map(|&c| {
+        monoclass_parent_score(process, deref_type, c, monoclass_parent, monoclassdef_klass, monoclass_name)
+    }).sum();
+    asr::print_message(&format!("Offsets monoclass_parent: 0x{:X?}, parent_score: {}", monoclass_parent, parent_score));
+    if parent_score < 3 * default_classes.len() as i32 {
+        asr::print_message(&format!("BAD BAD parent_score: some invalid classes, {} vs {}", parent_score, 3 * default_classes.len()));
+    } else if parent_score == 3 * default_classes.len() as i32 {
+        asr::print_message(&format!("BAD parent_score: they can't all be null, {} vs {}", parent_score, 3 * default_classes.len()));
+    }
 
     // TODO get_static_table:
     //   monoclass_runtime_info
@@ -522,6 +539,23 @@ fn monoclass_fields_score(
         if name_str.is_empty() { return 4; }
     }
     5
+}
+
+fn monoclass_parent_score(process: &Process, deref_type: DerefType, c: Address, monoclass_parent: i32, monoclassdef_klass: i32, monoclass_name: i32) -> i32 {
+    let Ok(parent_addr) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_parent) else {
+        return 0;
+    };
+    // It's okay to be null, it's not okay to point to something not a valid class
+    if parent_addr.is_null() {
+        return 3;
+    }
+    let Ok(parent) = read_pointer(process, deref_type, parent_addr) else {
+        return 1;
+    };
+    if class_name(process, deref_type, parent, monoclassdef_klass, monoclass_name).is_none() {
+        return 2;
+    }
+    4
 }
 
 // --------------------------------------------------------
