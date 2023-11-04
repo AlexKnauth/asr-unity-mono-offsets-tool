@@ -258,6 +258,26 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message("BAD: field_count_score is not at maximum");
     }
 
+    // Hard to guess both monoclass_fields and monoclassfieldalignment at the same time.
+    // So make an assumption about monoclassfieldalignment based on 64-bit vs 32-bit.
+    let monoclassfieldalignment = match deref_type {
+        DerefType::Bit32 => 0x10,
+        DerefType::Bit64 => 0x20,
+    };
+    asr::print_message(&format!("Offsets monoclassfieldalignment: 0x{:X?}, from {:?}", monoclassfieldalignment, deref_type));
+    // Also make an assumption about monoclassfield_name based on 64-bit vs 32-bit.
+    let monoclassfield_name = match deref_type {
+        DerefType::Bit32 => 0x4,
+        DerefType::Bit64 => 0x8,
+    };
+    asr::print_message(&format!("Offsets monoclassfield_name: 0x{:X?}, from {:?}", monoclassfield_name, deref_type));
+    // Also make an assumption about monoclassfield_offset based on 64-bit vs 32-bit.
+    let monoclassfield_offset = match deref_type {
+        DerefType::Bit32 => 0xC,
+        DerefType::Bit64 => 0x18,
+    };
+    asr::print_message(&format!("Offsets monoclassfield_offset: 0x{:X?}, from {:?}", monoclassfield_offset, deref_type));
+
     // TODO: Load some initial information from the process.
     loop {
         // TODO: Do something on every tick.
