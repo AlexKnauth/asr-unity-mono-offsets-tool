@@ -15,7 +15,7 @@ use binary_format::*;
 
 use crate::{file::file_read_all_bytes, file_format::{elf, macho}};
 
-use alloc::collections::BTreeSet;
+use alloc::collections::{BTreeMap, BTreeSet};
 
 asr::async_main!(stable);
 
@@ -242,19 +242,50 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message("BAD: next_class_cache_score is not at maximum");
     }
 
-    // expect class_int32 to have 3 fields
-    let class_int32 = classes_iter(process, deref_type, table_addr, class_cache_size, monoclassdef_next_class_cache).find(|&class| {
-        class_name(process, deref_type, class, monoclassdef_klass, monoclass_name).as_deref() == Some("Int32")
+    let mscorlib_assembly = assemblies_iter(process, deref_type, assemblies).find(|&assembly| {
+        monoassembly_aname_string(process, deref_type, assembly, monoassembly_aname).as_deref() == Some("mscorlib")
     })?;
+    let mscorlib_image = read_pointer(process, deref_type, mscorlib_assembly + monoassembly_image).ok()?;
+    let mscorlib_class_cache_size = process.read::<i32>(mscorlib_image + monoimage_class_cache + monointernalhashtable_size).ok()?;
+    let mscorlib_table_addr = read_pointer(process, deref_type, mscorlib_image + monoimage_class_cache + monointernalhashtable_table).ok()?;
+
+    // expect class_int32 to have 3 fields
+    let map_name_field_counts: BTreeMap<&str, u32> = BTreeMap::from([
+        ("Boolean", 7),
+        ("Byte", 3),
+        ("Char", 9),
+        ("Enum", 2),
+        ("Guid", 15),
+        ("Int32", 3),
+        ("SByte", 3),
+        ("Single", 7),
+        ("String", 8),
+        ("UInt32", 3),
+        ("UnSafeCharBuffer", 3),
+        ("Version", 6),
+    ]);
+    let mut map_name_class_field_counts: BTreeMap<&str, (Address, u32)> = BTreeMap::new();
+    for class in classes_iter(process, deref_type, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_next_class_cache) {
+        let Some(name) = class_name(process, deref_type, class, monoclassdef_klass, monoclass_name) else {
+            break;
+        };
+        if let Some((&k, &v)) = map_name_field_counts.get_key_value(name.as_str()) {
+            map_name_class_field_counts.insert(k, (class, v));
+        }
+    }
 
     let monoclassdef_field_count = [0x64, 0x8C, 0x94, 0x9C, 0xA4, 0xF0, 0xF8, 0x100].into_iter().max_by_key(|&monoclassdef_field_count| {
-        let field_count_score = monoclassdef_field_count_score(process, deref_type, class_int32, 3, monoclassdef_field_count, monoclassdef_next_class_cache);
+        let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n)| {
+            monoclassdef_field_count_score(process, deref_type, c, n, monoclassdef_field_count, monoclassdef_next_class_cache)
+        }).sum();
         // asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
         field_count_score
     })?;
-    let field_count_score = monoclassdef_field_count_score(process, deref_type, class_int32, 3, monoclassdef_field_count, monoclassdef_next_class_cache);
+    let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n)| {
+        monoclassdef_field_count_score(process, deref_type, c, n, monoclassdef_field_count, monoclassdef_next_class_cache)
+    }).sum();
     asr::print_message(&format!("Offsets monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
-    if field_count_score < 4 {
+    if field_count_score < 4 * map_name_class_field_counts.len() as i32 {
         asr::print_message("BAD: field_count_score is not at maximum");
     }
 
