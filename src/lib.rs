@@ -335,12 +335,11 @@ async fn option_main(process: &Process) -> Option<()> {
 
     let default_classes: BTreeSet<Address> = classes_iter(process, deref_type, table_addr, class_cache_size, monoclassdef_next_class_cache).collect();
 
-    //   monoclass_parent
     let monoclass_parent = [0x20, 0x24, 0x28, 0x30].into_iter().max_by_key(|&monoclass_parent| {
         let parent_score: i32 = default_classes.iter().map(|&c| {
             monoclass_parent_score(process, deref_type, c, monoclass_parent, monoclassdef_klass, monoclass_name)
         }).sum();
-        asr::print_message(&format!("monoclass_parent: 0x{:X?}, parent_score: {}", monoclass_parent, parent_score));
+        // asr::print_message(&format!("monoclass_parent: 0x{:X?}, parent_score: {}", monoclass_parent, parent_score));
         parent_score
     })?;
     let parent_score: i32 = default_classes.iter().map(|&c| {
