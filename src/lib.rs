@@ -171,6 +171,9 @@ async fn option_main(process: &Process) -> Option<()> {
     })?;
     let aname_score = address_aname_score(process, deref_type, first_assembly_data + monoassembly_aname);
     asr::print_message(&format!("Offsets monoassembly_aname: 0x{:X?}, aname_score: {}", monoassembly_aname, aname_score));
+    if aname_score < 5 {
+        asr::print_message("BAD: aname_score is not at maximum");
+    }
     if let Some(name_str) = monoassembly_aname_string(process, deref_type, first_assembly_data, monoassembly_aname) {
         asr::print_message(&format!("name_str: {}", name_str));
     }
@@ -185,6 +188,9 @@ async fn option_main(process: &Process) -> Option<()> {
     })?;
     let image_score = address_image_score(process, deref_type, default_assembly + monoassembly_image);
     asr::print_message(&format!("Offsets monoassembly_image: 0x{:X?}, image_score: {}", monoassembly_image, image_score));
+    if image_score < 5 {
+        asr::print_message("BAD: image_score is not at maximum");
+    }
     let default_image = read_pointer(process, deref_type, default_assembly + monoassembly_image).ok()?;
     // asr::print_message(&format!("default_image: {}", default_image));
 
@@ -207,6 +213,9 @@ async fn option_main(process: &Process) -> Option<()> {
     })?;
     let class_cache_score = monoimage_class_cache_score(process, deref_type, default_image, monoimage_class_cache, monointernalhashtable_size, monointernalhashtable_table);
     asr::print_message(&format!("Offsets monoimage_class_cache: 0x{:X?}, class_cache_score: {}", monoimage_class_cache, class_cache_score));
+    if class_cache_score < 8 {
+        asr::print_message("BAD: class_cache_score is not at maximum");
+    }
     let class_cache_size = process.read::<i32>(default_image + monoimage_class_cache + monointernalhashtable_size).ok()?;
     // asr::print_message(&format!("class_cache_size: {}", class_cache_size));
     let table_addr = read_pointer(process, deref_type, default_image + monoimage_class_cache + monointernalhashtable_table).ok()?;
@@ -230,6 +239,10 @@ async fn option_main(process: &Process) -> Option<()> {
     })?;
     let class_name_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
     asr::print_message(&format!("Offsets monoclass_name: 0x{:X?}, class_name_score: {}", monoclass_name, class_name_score));
+    if class_name_score < 7 {
+        asr::print_message("BAD: class_name_score is not at maximum");
+    }
+    
 
     let monoclassdef_next_class_cache = [0xA0, 0xA8, 0xF8, 0x100, 0x108].into_iter().max_by_key(|&monoclassdef_next_class_cache| {
         let next_class_cache_score = monoclassdef_next_class_cache_score(process, deref_type, table_addr, class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name, monoclass_name_space);
