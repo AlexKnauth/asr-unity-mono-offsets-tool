@@ -206,7 +206,7 @@ async fn option_main(process: &Process) -> Option<()> {
         monoimage_class_cache_score(process, deref_type, default_image, monoimage_class_cache, monointernalhashtable_size, monointernalhashtable_table)
     })?;
     let class_cache_score = monoimage_class_cache_score(process, deref_type, default_image, monoimage_class_cache, monointernalhashtable_size, monointernalhashtable_table);
-    asr::print_message(&format!("monoimage_class_cache: 0x{:X?}, class_cache_score: {}", monoimage_class_cache, class_cache_score));
+    asr::print_message(&format!("Offsets monoimage_class_cache: 0x{:X?}, class_cache_score: {}", monoimage_class_cache, class_cache_score));
     let class_cache_size = process.read::<i32>(default_image + monoimage_class_cache + monointernalhashtable_size).ok()?;
     asr::print_message(&format!("class_cache_size: {}", class_cache_size));
     let table_addr = read_pointer(process, deref_type, default_image + monoimage_class_cache + monointernalhashtable_table).ok()?;
@@ -249,7 +249,7 @@ async fn option_main(process: &Process) -> Option<()> {
 
     let monoclassdef_field_count = [0x64, 0x8C, 0x94, 0x9C, 0xA4, 0xF0, 0xF8, 0x100].into_iter().max_by_key(|&monoclassdef_field_count| {
         let field_count_score = monoclassdef_field_count_score(process, deref_type, class_int32, 3, monoclassdef_field_count, monoclassdef_next_class_cache);
-        asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
+        // asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
         field_count_score
     })?;
     let field_count_score = monoclassdef_field_count_score(process, deref_type, class_int32, 3, monoclassdef_field_count, monoclassdef_next_class_cache);
