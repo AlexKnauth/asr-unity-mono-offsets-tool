@@ -311,14 +311,14 @@ async fn option_main(process: &Process) -> Option<()> {
 
     let monoclass_fields = [0x60, 0x74, 0x90, 0x98, 0xA8].into_iter().max_by_key(|&monoclass_fields| {
         let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1)| {
-            let n2 = process.read::<u32>(class + monoclassdef_field_count).unwrap_or(n1);
+            let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1);
             monoclass_fields_score(process, deref_type, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
         }).sum();
         asr::print_message(&format!("monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
         fields_score
     })?;
     let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1)| {
-        let n2 = process.read::<u32>(class + monoclassdef_field_count).unwrap_or(n1);
+        let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1);
         monoclass_fields_score(process, deref_type, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
     }).sum();
     asr::print_message(&format!("Offsets monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
