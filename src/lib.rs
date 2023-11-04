@@ -353,6 +353,7 @@ fn monoclass_name_score(
     };
     if std::str::from_utf8(&space_cstr).is_err() { return 5; };
     if name_str.is_empty() { return 6; }
+    // asr::print_message(&format!("class name_str: {}", name_str));
     // it's okay for the space to be an empty string,
     // but it's not okay for it to not be valid utf8
     7
