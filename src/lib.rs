@@ -242,11 +242,21 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message("BAD: next_class_cache_score is not at maximum");
     }
 
+    // expect class_int32 to have 3 fields
+    let class_int32 = classes_iter(process, deref_type, table_addr, class_cache_size, monoclassdef_next_class_cache).find(|&class| {
+        class_name(process, deref_type, class, monoclassdef_klass, monoclass_name).as_deref() == Some("Int32")
+    })?;
+
     let monoclassdef_field_count = [0x64, 0x94, 0x9C, 0xA4, 0xF0, 0xF8, 0x100].into_iter().max_by_key(|&monoclassdef_field_count| {
-        let field_count_score = monoclassdef_field_count_score(process, deref_type, class, monoclassdef_field_count, monoclassdef_next_class_cache);
+        let field_count_score = monoclassdef_field_count_score(process, deref_type, class_int32, 3, monoclassdef_field_count, monoclassdef_next_class_cache);
         asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
         field_count_score
     })?;
+    let field_count_score = monoclassdef_field_count_score(process, deref_type, class_int32, 3, monoclassdef_field_count, monoclassdef_next_class_cache);
+    asr::print_message(&format!("Offsets monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
+    if field_count_score < 4 {
+        asr::print_message("BAD: field_count_score is not at maximum");
+    }
 
     // TODO: Load some initial information from the process.
     loop {
@@ -346,6 +356,12 @@ fn monoclass_name_score(
     7
 }
 
+fn class_name(process: &Process, deref_type: DerefType, class: Address, monoclassdef_klass: i32, monoclass_name: i32) -> Option<String> {
+    let name_ptr = read_pointer(process, deref_type, class + monoclassdef_klass + monoclass_name).ok()?;
+    let name_cstr = process.read::<ArrayCString<CSTR>>(name_ptr).ok()?;
+    String::from_utf8(name_cstr.to_vec()).ok()
+}
+
 fn monoclassdef_next_class_cache_score(
     process: &Process,
     deref_type: DerefType,
@@ -383,6 +399,7 @@ fn monoclassdef_field_count_score(
     process: &Process,
     _deref_type: DerefType,
     class: Address,
+    expected: u32,
     monoclassdef_field_count: i32,
     monoclassdef_next_class_cache: i32,
 ) -> i32 {
@@ -390,9 +407,10 @@ fn monoclassdef_field_count_score(
     let Ok(field_count) = process.read::<u32>(class + monoclassdef_field_count) else {
         return 1;
     };
-    asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count: {}", monoclassdef_field_count, field_count));
+    if 0x100 <= field_count { return 2; }
+    if field_count != expected { return 3; }
     // TODO: a better way of telling when something isn't the correct field count
-    2
+    4
 }
 
 fn assemblies_iter<'a>(process: &'a Process, deref_type: DerefType, assemblies: Address) -> impl Iterator<Item = Address> + 'a {
@@ -414,5 +432,28 @@ fn assemblies_iter<'a>(process: &'a Process, deref_type: DerefType, assemblies: 
             assembly = next_assembly;
             Some(data)
         }
+    })
+}
+
+fn classes_iter<'a>(
+    process: &'a Process,
+    deref_type: DerefType,
+    table_addr: Address,
+    class_cache_size: i32,
+    monoclassdef_next_class_cache: i32,
+) -> impl Iterator<Item = Address> + 'a {
+    (0..class_cache_size).flat_map(move |i| {
+        let table_addr_i = table_addr + (i as u64).wrapping_mul(deref_type.size_of_ptr());
+        let mut table = read_pointer(process, deref_type, table_addr_i).unwrap_or_default();
+        let mut seen = BTreeSet::new();
+        iter::from_fn(move || -> Option<Address> {
+            if table.is_null() || seen.replace(table).is_some() {
+                None
+            } else {
+                let class = read_pointer(process, deref_type, table).ok()?;
+                table = read_pointer(process, deref_type, table + monoclassdef_next_class_cache).unwrap_or_default();
+                Some(class)
+            }
+        })
     })
 }
