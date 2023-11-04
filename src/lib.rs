@@ -352,9 +352,16 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message(&format!("BAD parent_score: they can't all be null, {} vs {}", parent_score, 3 * default_classes.len()));
     }
 
+    // Hard to guess both monoclass_runtime_info and monoclassruntimeinfo_domain_vtables at the same time.
+    // So make an assumption about monoclassruntimeinfo_domain_vtables based on 64-bit vs 32-bit.
+    let monoclassruntimeinfo_domain_vtables = match deref_type {
+        DerefType::Bit32 => 0x4,
+        DerefType::Bit64 => 0x8,
+    };
+    asr::print_message(&format!("Offsets monoclassruntimeinfo_domain_vtables: 0x{:X?}, from {:?}", monoclassruntimeinfo_domain_vtables, deref_type));
+
     // TODO get_static_table:
     //   monoclass_runtime_info
-    //   monoclassruntimeinfo_domain_vtables
     //   monoclass_vtable_size
     //   monovtable_vtable
 
