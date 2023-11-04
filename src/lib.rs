@@ -348,6 +348,7 @@ fn monoclass_name_score(
         return 3;
     };
     let Ok(name_str) = std::str::from_utf8(&name_cstr) else {
+        asr::print_message(&format!("class name_cstr not utf8: {:X?}", name_cstr.as_bytes()));
         return 4;
     };
     if std::str::from_utf8(&space_cstr).is_err() { return 5; };
