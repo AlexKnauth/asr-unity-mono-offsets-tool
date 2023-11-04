@@ -309,6 +309,23 @@ async fn option_main(process: &Process) -> Option<()> {
     };
     asr::print_message(&format!("Offsets monoclassfield_offset: 0x{:X?}, from {:?}", monoclassfield_offset, deref_type));
 
+    let monoclass_fields = [0x60, 0x74, 0x90, 0x98, 0xA8].into_iter().max_by_key(|&monoclass_fields| {
+        let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1)| {
+            let n2 = process.read::<u32>(class + monoclassdef_field_count).unwrap_or(n1);
+            monoclass_fields_score(process, deref_type, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
+        }).sum();
+        asr::print_message(&format!("monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
+        fields_score
+    })?;
+    let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1)| {
+        let n2 = process.read::<u32>(class + monoclassdef_field_count).unwrap_or(n1);
+        monoclass_fields_score(process, deref_type, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
+    }).sum();
+    asr::print_message(&format!("Offsets monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
+    if fields_score < 5 * map_name_class_field_counts.len() as i32 {
+        asr::print_message("BAD: fields_score is not at maximum");
+    }
+
     // TODO: Load some initial information from the process.
     loop {
         // TODO: Do something on every tick.
@@ -463,6 +480,35 @@ fn monoclassdef_field_count_score(
     // TODO: a better way of telling when something isn't the correct field count
     4
 }
+
+fn monoclass_fields_score(
+    process: &Process,
+    deref_type: DerefType,
+    class: Address,
+    n: u32,
+    monoclassdef_klass: i32,
+    monoclass_fields: i32,
+    monoclassfieldalignment: i32,
+    monoclassfield_name: i32
+) -> i32 {
+    let Ok(fields) = read_pointer(process, deref_type, class + monoclassdef_klass + monoclass_fields) else {
+        return 0;
+    };
+    for i in 0..n {
+        let field = fields + i.wrapping_mul(monoclassfieldalignment as u32);
+        let Ok(name_addr) = read_pointer(process, deref_type, field + monoclassfield_name) else {
+            return 1;
+        };
+        let Ok(name_cstr) = process.read::<ArrayCString<CSTR>>(name_addr) else {
+            return 2;
+        };
+        let Ok(name_str) = std::str::from_utf8(&name_cstr) else { return 3; };
+        if name_str.is_empty() { return 4; }
+    }
+    5
+}
+
+// --------------------------------------------------------
 
 fn assemblies_iter<'a>(process: &'a Process, deref_type: DerefType, assemblies: Address) -> impl Iterator<Item = Address> + 'a {
     let mut assembly = assemblies;
