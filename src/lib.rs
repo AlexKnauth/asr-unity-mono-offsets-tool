@@ -4,6 +4,8 @@ mod binary_format;
 mod file;
 mod file_format;
 
+use std::iter;
+
 use asr::{
     future::{next_tick, retry},
     Process, file_format::pe, Address, Address32, signature::Signature, Address64, string::ArrayCString,
@@ -173,30 +175,9 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message(&format!("name_str: {}", name_str));
     }
 
-    let mut assembly = assemblies;
-    let default_assembly = loop {
-        let [data, next_assembly]: [Address; 2] = match deref_type {
-            DerefType::Bit64 => process
-                .read::<[Address64; 2]>(assembly)
-                .ok()?
-                .map(|item| item.into()),
-            DerefType::Bit32 => process
-                .read::<[Address32; 2]>(assembly)
-                .ok()?
-                .map(|item| item.into()),
-        };
-
-        if monoassembly_aname_string(process, deref_type, data, monoassembly_aname).as_deref() == Some("Assembly-CSharp") {
-            asr::print_message("found Assembly-CSharp");
-            break data;
-        }
-        
-        if next_assembly.is_null() {
-            return None;
-        } else {
-            assembly = next_assembly;
-        }
-    };
+    let default_assembly = assemblies_iter(process, deref_type, assemblies).find(|&assembly| {
+        monoassembly_aname_string(process, deref_type, assembly, monoassembly_aname).as_deref() == Some("Assembly-CSharp")
+    })?;
     asr::print_message(&format!("default_assembly: {}", default_assembly));
 
     let monoassembly_image = [0x40, 0x44, 0x48, 0x58, 0x60].into_iter().max_by_key(|&monoassembly_image| {
@@ -412,4 +393,26 @@ fn monoclassdef_field_count_score(
     asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count: {}", monoclassdef_field_count, field_count));
     // TODO: a better way of telling when something isn't the correct field count
     2
+}
+
+fn assemblies_iter<'a>(process: &'a Process, deref_type: DerefType, assemblies: Address) -> impl Iterator<Item = Address> + 'a {
+    let mut assembly = assemblies;
+    iter::from_fn(move || {
+        if assembly.is_null() {
+            None
+        } else {
+            let [data, next_assembly]: [Address; 2] = match deref_type {
+                DerefType::Bit64 => process
+                    .read::<[Address64; 2]>(assembly)
+                    .ok()?
+                    .map(|item| item.into()),
+                DerefType::Bit32 => process
+                    .read::<[Address32; 2]>(assembly)
+                    .ok()?
+                    .map(|item| item.into()),
+            };
+            assembly = next_assembly;
+            Some(data)
+        }
+    })
 }
