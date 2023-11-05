@@ -48,6 +48,16 @@ const UNITY_PLAYER_NAMES: [&str; 3] = [
     "UnityPlayer.dylib",
 ];
 
+// expect class_int32 to have 3 fields
+const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 6] = [
+    ("Byte", (3, 25)),
+    ("Guid", (15, 8)),
+    ("Int32", (3, 25)),
+    ("SByte", (3, 25)),
+    ("UInt32", (3, 25)),
+    ("UnSafeCharBuffer", (3, 25)),
+];
+
 // --------------------------------------------------------
 
 async fn main() {
@@ -271,33 +281,25 @@ async fn option_main(process: &Process) -> Option<()> {
     let mscorlib_class_cache_size = process.read::<i32>(mscorlib_image + monoimage_class_cache + monointernalhashtable_size).ok()?;
     let mscorlib_table_addr = read_pointer(process, deref_type, mscorlib_image + monoimage_class_cache + monointernalhashtable_table).ok()?;
 
-    // expect class_int32 to have 3 fields
-    let map_name_field_counts: BTreeMap<&str, u32> = BTreeMap::from([
-        ("Byte", 3),
-        ("Guid", 15),
-        ("Int32", 3),
-        ("SByte", 3),
-        ("UInt32", 3),
-        ("UnSafeCharBuffer", 3),
-    ]);
-    let mut map_name_class_field_counts: BTreeMap<&str, (Address, u32)> = BTreeMap::new();
+    let map_name_field_counts: BTreeMap<&str, (u32, u32)> = BTreeMap::from(NAME_FIELD_COUNTS);
+    let mut map_name_class_field_counts: BTreeMap<&str, (Address, u32, u32)> = BTreeMap::new();
     for class in classes_iter(process, deref_type, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_next_class_cache) {
         let Some(name) = class_name(process, deref_type, class, monoclassdef_klass, monoclass_name) else {
             break;
         };
-        if let Some((&k, &v)) = map_name_field_counts.get_key_value(name.as_str()) {
-            map_name_class_field_counts.insert(k, (class, v));
+        if let Some((&k, &(v1, v2))) = map_name_field_counts.get_key_value(name.as_str()) {
+            map_name_class_field_counts.insert(k, (class, v1, v2));
         }
     }
 
     let monoclassdef_field_count = [0x64, 0x8C, 0x94, 0x9C, 0xA4, 0xF0, 0xF8, 0x100].into_iter().max_by_key(|&monoclassdef_field_count| {
-        let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n)| {
+        let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n, _)| {
             monoclassdef_field_count_score(process, deref_type, c, n, monoclassdef_field_count, monoclassdef_next_class_cache)
         }).sum();
         // asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
         field_count_score
     })?;
-    let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n)| {
+    let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n, _)| {
         monoclassdef_field_count_score(process, deref_type, c, n, monoclassdef_field_count, monoclassdef_next_class_cache)
     }).sum();
     asr::print_message(&format!("Offsets monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
@@ -326,14 +328,14 @@ async fn option_main(process: &Process) -> Option<()> {
     asr::print_message(&format!("Offsets monoclassfield_offset: 0x{:X?}, from {:?}", monoclassfield_offset, deref_type));
 
     let monoclass_fields = [0x60, 0x74, 0x90, 0x98, 0xA0, 0xA8].into_iter().max_by_key(|&monoclass_fields| {
-        let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1)| {
+        let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1, _)| {
             let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1);
             monoclass_fields_score(process, deref_type, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
         }).sum();
         // asr::print_message(&format!("monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
         fields_score
     })?;
-    let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1)| {
+    let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1, _)| {
         let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1);
         monoclass_fields_score(process, deref_type, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
     }).sum();
@@ -391,11 +393,68 @@ async fn option_main(process: &Process) -> Option<()> {
     //   monoclass_vtable_size
     //   monovtable_vtable
 
+    // monovtable_vtable is NOT used for V1, only for V2 and V3,
+    // and monoclass_vtable_size is used completely differently,
+    // so from here on it forks into 2 branches
+    if version == mono::Version::V1 {
+        asr::print_message("UNUSED / UNCONSTRAINED monovtable_vtable");
+        static_table_offsets_v1(deref_type).await?;
+    } else {
+        static_table_offsets_v2_v3(
+            process,
+            deref_type,
+            version,
+            map_name_class_field_counts,
+            monoclassdef_klass,
+            monoclass_runtime_info,
+        ).await?;
+    }
+
     // TODO: Load some initial information from the process.
     loop {
         // TODO: Do something on every tick.
         next_tick().await;
     }
+}
+
+async fn static_table_offsets_v1(deref_type: DerefType) -> Option<()> {
+    // this V1 monoclass_vtable_size is actually MonoVtable.data
+    let monoclass_vtable_size = match deref_type {
+        DerefType::Bit32 => 0xC,
+        DerefType::Bit64 => 0x18,
+    };
+    asr::print_message(&format!("V1 Offsets monoclass_vtable_size (MonoVtable.data): 0x{:X?}, from {:?}", monoclass_vtable_size, deref_type));
+    Some(())
+}
+
+async fn static_table_offsets_v2_v3(
+    process: &Process,
+    deref_type: DerefType,
+    version: mono::Version,
+    map_name_class_field_counts: BTreeMap<&str, (Address, u32, u32)>,
+    monoclassdef_klass: i32,
+    monoclass_runtime_info: i32,
+) -> Option<()> {
+    // this V2/V3 monoclass_vtable_size is actually TypeDefinitionVTableSize
+    let monoclass_vtable_size = [0x38, 0x54, 0x5C].into_iter().max_by_key(|&monoclass_vtable_size| {
+        let vtable_size_score: i32 = map_name_class_field_counts.iter().map(|(&k, &(c, _, n))| {
+            v2_v3_monoclass_vtable_size_score(
+                process,
+                deref_type,
+                monoclassdef_klass,
+                monoclass_vtable_size,
+                k,
+                c,
+                n)
+        }).sum();
+        asr::print_message(&format!("{:?} monoclass_vtable_size (TypeDefinitionVTableSize): 0x{:X}, vtable_size_score: {}", version, monoclass_vtable_size, vtable_size_score));
+        vtable_size_score
+    })?;
+    asr::print_message(&format!("{:?} Offsets monoclass_vtable_size (TypeDefinitionVTableSize): 0x{:X}", version, monoclass_vtable_size));
+    let monovtable_vtable = [0x28, 0x2C, 0x40, 0x48].into_iter().max_by_key(|&monovtable_vtable| {
+        0
+    })?;
+    Some(())
 }
 
 fn read_pointer(process: &Process, deref_type: DerefType, address: Address) -> Result<Address, asr::Error> {
@@ -652,6 +711,26 @@ fn monoclass_runtime_info_score(process: &Process, deref_type: DerefType, c: Add
         return 2;
     }
     4
+}
+
+fn v2_v3_monoclass_vtable_size_score(
+    process: &Process,
+    deref_type: DerefType,
+    monoclassdef_klass: i32,
+    monoclass_vtable_size: i32,
+    k: &str,
+    c: Address,
+    n: u32,
+) -> i32 {
+    let Ok(vtable_size) = process.read::<u32>(c + monoclassdef_klass + monoclass_vtable_size) else {
+        return 0;
+    };
+    if vtable_size == 0 { return 1; }
+    if vtable_size == 434 { return 2; }
+    if 0x100 <= vtable_size { return 3; }
+    asr::print_message(&format!("{:X?} {} {}", monoclass_vtable_size, k, vtable_size));
+    if vtable_size != n { return 4; }
+    5
 }
 
 // --------------------------------------------------------
