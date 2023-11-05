@@ -55,7 +55,7 @@ const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 6] = [
     ("Int32", (3, 25)),
     ("SByte", (3, 25)),
     ("UInt32", (3, 25)),
-    ("UnSafeCharBuffer", (3, 25)),
+    ("UnSafeCharBuffer", (3, 4)),
 ];
 
 // --------------------------------------------------------
