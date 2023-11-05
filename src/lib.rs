@@ -58,6 +58,13 @@ const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 6] = [
     ("UnSafeCharBuffer", (3, 4)),
 ];
 
+const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[u8])]); 4] = [
+    ("Byte", &[("MaxValue", &[0xFF]), ("MinValue", &[0x00])]),
+    ("Int32", &[("MaxValue", &[0x7f, 0xff, 0xff, 0xff]), ("MinValue", &[0x80, 0x00, 0x00, 0x00])]),
+    ("SByte", &[("MaxValue", &[0x7F]), ("MinValue", &[0x80])]),
+    ("UInt32", &[("MaxValue", &[0xff, 0xff, 0xff, 0xff]), ("MinValue", &[0x00, 0x00, 0x00, 0x00])]),
+];
+
 // --------------------------------------------------------
 
 async fn main() {
@@ -444,6 +451,11 @@ async fn option_main(process: &Process) -> Option<()> {
             version,
             map_name_class_field_counts,
             monoclassdef_klass,
+            monoclassdef_field_count,
+            monoclass_fields,
+            monoclassfieldalignment,
+            monoclassfield_name,
+            monoclassfield_offset,
             monoclass_runtime_info,
             monoclassruntimeinfo_domain_vtables,
         ).await?;
@@ -472,6 +484,11 @@ async fn static_table_offsets_v2_v3(
     version: mono::Version,
     map_name_class_field_counts: BTreeMap<&str, (Address, u32, u32)>,
     monoclassdef_klass: i32,
+    monoclassdef_field_count: i32,
+    monoclass_fields: i32,
+    monoclassfieldalignment: i32,
+    monoclassfield_name: i32,
+    monoclassfield_offset: i32,
     monoclass_runtime_info: i32,
     monoclassruntimeinfo_domain_vtables: i32,
 ) -> Option<()> {
@@ -496,6 +513,11 @@ async fn static_table_offsets_v2_v3(
             deref_type,
             &map_name_class_field_counts,
             monoclassdef_klass,
+            monoclassdef_field_count,
+            monoclass_fields,
+            monoclassfieldalignment,
+            monoclassfield_name,
+            monoclassfield_offset,
             monoclass_runtime_info,
             monoclassruntimeinfo_domain_vtables,
             monoclass_vtable_size,
@@ -792,33 +814,68 @@ fn v2_v3_monovtable_vtable_score(
     deref_type: DerefType,
     map_name_class_field_counts: &BTreeMap<&str, (Address, u32, u32)>,
     monoclassdef_klass: i32,
+    monoclassdef_field_count: i32,
+    monoclass_fields: i32,
+    monoclassfieldalignment: i32,
+    monoclassfield_name: i32,
+    monoclassfield_offset: i32,
     monoclass_runtime_info: i32,
     monoclassruntimeinfo_domain_vtables: i32,
     monoclass_vtable_size: i32,
     monovtable_vtable: i32,
 ) -> i32 {
-    let c = map_name_class_field_counts.get("UnSafeCharBuffer").unwrap().0;
-    let Ok(runtime_info) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_runtime_info) else {
-        return 0;
-    };
-    // It's okay to be null?
-    if runtime_info.is_null() {
-        return 2;
+    for (k, sfbs) in NAME_STATIC_FIELD_BYTES {
+        let c = map_name_class_field_counts.get(k).unwrap().0;
+        let Ok(runtime_info) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_runtime_info) else {
+            return 0;
+        };
+        // It's okay to be null?
+        if runtime_info.is_null() {
+            return 2;
+        }
+        let Ok(vtables) = read_pointer(process, deref_type, runtime_info + monoclassruntimeinfo_domain_vtables) else {
+            return 0;
+        };
+        let Ok(vtable_size) = process.read::<u32>(c + monoclassdef_klass + monoclass_vtable_size) else {
+            return 0;
+        };
+        let vtables2 = vtables + monovtable_vtable;
+        let Ok(static_table) = read_pointer(process, deref_type, vtables2 + (vtable_size as u64).wrapping_mul(deref_type.size_of_ptr())) else {
+            return 0;
+        };
+        let Ok(field_count) = process.read::<u32>(c + monoclassdef_field_count) else {
+            return 1;
+        };
+        let Ok(fields) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_fields) else {
+            return 1;
+        };
+        for (sf, bs) in sfbs {
+            let Some(offset) = (0..field_count).find_map(|i| -> Option<u32> {
+                let field = fields + i.wrapping_mul(monoclassfieldalignment as u32);
+                let name_addr = read_pointer(process, deref_type, field + monoclassfield_name).ok()?;
+                let name_cstr = process.read::<ArrayCString<CSTR>>(name_addr).ok()?;
+                let name_str = std::str::from_utf8(&name_cstr).ok()?;
+                let offset = process.read::<u32>(field + monoclassfield_offset).ok()?;
+                asr::print_message(&format!("k: {}, name_str: {}, offset: 0x{:X?}", k, name_str, offset));
+                if &name_str == sf {
+                    Some(offset)
+                } else {
+                    None
+                }
+            }) else {
+                return 1;
+            };
+            let singleton_location = static_table + offset;
+            let Ok(addr) = read_pointer(process, deref_type, singleton_location) else {
+                return 1;
+            };
+            // asr::print_message(&format!("sf: {}, offset: 0x{:X?}, addr: {}", sf, offset, addr));
+        }
+        let Ok(a) = process.read::<u8>(static_table) else {
+            return 1;
+        };
+        // asr::print_message(&format!("a: 0x{:X?}", a));
     }
-    let Ok(vtables) = read_pointer(process, deref_type, runtime_info + monoclassruntimeinfo_domain_vtables) else {
-        return 0;
-    };
-    let Ok(vtable_size) = process.read::<u32>(c + monoclassdef_klass + monoclass_vtable_size) else {
-        return 0;
-    };
-    let vtables2 = vtables + monovtable_vtable;
-    let Ok(static_table) = read_pointer(process, deref_type, vtables2 + (vtable_size as u64).wrapping_mul(deref_type.size_of_ptr())) else {
-        return 0;
-    };
-    let Ok(a) = process.read::<u8>(static_table) else {
-        return 1;
-    };
-    asr::print_message(&format!("a: 0x{:X?}", a));
     3
 }
 
