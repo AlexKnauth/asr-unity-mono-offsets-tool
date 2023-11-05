@@ -58,11 +58,23 @@ const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 6] = [
     ("UnSafeCharBuffer", (3, 4)),
 ];
 
-const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[u8])]); 4] = [
-    ("Byte", &[("MaxValue", &[0xFF]), ("MinValue", &[0x00])]),
-    ("Int32", &[("MaxValue", &[0x7f, 0xff, 0xff, 0xff]), ("MinValue", &[0x80, 0x00, 0x00, 0x00])]),
-    ("SByte", &[("MaxValue", &[0x7F]), ("MinValue", &[0x80])]),
-    ("UInt32", &[("MaxValue", &[0xff, 0xff, 0xff, 0xff]), ("MinValue", &[0x00, 0x00, 0x00, 0x00])]),
+const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[i32], &[u8])])]); 4] = [
+    ("Byte", &[
+        ("MaxValue", &[(&[], &[0xFF])]),
+        ("MinValue", &[(&[], &[0x00])]),
+    ]),
+    ("Int32", &[
+        ("MaxValue", &[(&[], &[0x7f, 0xff, 0xff, 0xff])]),
+        ("MinValue", &[(&[], &[0x80, 0x00, 0x00, 0x00])]),
+    ]),
+    ("SByte", &[
+        ("MaxValue", &[(&[], &[0x7F])]),
+        ("MinValue", &[(&[], &[0x80])]),
+    ]),
+    ("UInt32", &[
+        ("MaxValue", &[(&[], &[0xff, 0xff, 0xff, 0xff])]),
+        ("MinValue", &[(&[], &[0x00, 0x00, 0x00, 0x00])]),
+    ]),
 ];
 
 // --------------------------------------------------------
