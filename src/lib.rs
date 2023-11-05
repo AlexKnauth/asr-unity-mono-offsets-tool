@@ -440,7 +440,6 @@ async fn static_table_offsets_v2_v3(
         let vtable_size_score: i32 = map_name_class_field_counts.iter().map(|(&k, &(c, _, n))| {
             v2_v3_monoclass_vtable_size_score(
                 process,
-                deref_type,
                 monoclassdef_klass,
                 monoclass_vtable_size,
                 k,
@@ -715,7 +714,6 @@ fn monoclass_runtime_info_score(process: &Process, deref_type: DerefType, c: Add
 
 fn v2_v3_monoclass_vtable_size_score(
     process: &Process,
-    deref_type: DerefType,
     monoclassdef_klass: i32,
     monoclass_vtable_size: i32,
     k: &str,
