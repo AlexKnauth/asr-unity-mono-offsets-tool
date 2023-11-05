@@ -363,6 +363,8 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message(&format!("BAD parent_score: they can't all be null, {} vs {}", parent_score, 3 * default_classes.len()));
     }
 
+    next_tick().await;
+
     // Hard to guess both monoclass_runtime_info and monoclassruntimeinfo_domain_vtables at the same time.
     // So make an assumption about monoclassruntimeinfo_domain_vtables based on 64-bit vs 32-bit.
     let monoclassruntimeinfo_domain_vtables = match deref_type {
@@ -370,6 +372,8 @@ async fn option_main(process: &Process) -> Option<()> {
         DerefType::Bit64 => 0x8,
     };
     asr::print_message(&format!("Offsets monoclassruntimeinfo_domain_vtables: 0x{:X?}, from {:?}", monoclassruntimeinfo_domain_vtables, deref_type));
+
+    next_tick().await;
 
     let monoclass_runtime_info = [0x7C, 0x84, 0xA4, 0xC8, 0xD0, 0xF8].into_iter().max_by_key(|&monoclass_runtime_info| {
         let runtime_info_score: i32 = default_classes.iter().map(|&c| {
@@ -382,11 +386,13 @@ async fn option_main(process: &Process) -> Option<()> {
         monoclass_runtime_info_score(process, deref_type, c, monoclass_runtime_info, monoclassdef_klass, monoclassruntimeinfo_domain_vtables)
     }).sum();
     asr::print_message(&format!("Offsets monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
-    if runtime_info_score < 3 * default_classes.len() as i32 {
+    if runtime_info_score < 5 * default_classes.len() as i32 {
         asr::print_message(&format!("BAD BAD runtime_info_score: {} vs {}", runtime_info_score, 3 * default_classes.len()));
-    } else if runtime_info_score == 3 * default_classes.len() as i32 {
+    } else if runtime_info_score == 5 * default_classes.len() as i32 {
         asr::print_message(&format!("BAD runtime_info_score: they can't all be null, {} vs {}", runtime_info_score, 3 * default_classes.len()));
     }
+
+    next_tick().await;
 
     // TODO get_static_table:
     //   monoclass_runtime_info
@@ -701,15 +707,20 @@ fn monoclass_runtime_info_score(process: &Process, deref_type: DerefType, c: Add
     };
     // It's okay to be null?
     if runtime_info.is_null() {
-        return 3;
+        return 5;
     }
-    let Ok(vtables) = read_pointer(process, deref_type, runtime_info + monoclassruntimeinfo_domain_vtables) else {
+    let Ok(max_domain) = process.read::<u16>(runtime_info) else {
         return 1;
     };
+    if 0x1000 <= max_domain { return 2; }
+    // asr::print_message(&format!("0x{:X?} max_domain {}", monoclass_runtime_info, max_domain));
+    let Ok(vtables) = read_pointer(process, deref_type, runtime_info + monoclassruntimeinfo_domain_vtables) else {
+        return 3;
+    };
     if process.read::<u8>(vtables).is_err() {
-        return 2;
+        return 4;
     }
-    4
+    6
 }
 
 fn v2_v3_monoclass_vtable_size_score(
