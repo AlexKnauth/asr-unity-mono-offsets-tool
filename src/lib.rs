@@ -445,6 +445,7 @@ async fn option_main(process: &Process) -> Option<()> {
             map_name_class_field_counts,
             monoclassdef_klass,
             monoclass_runtime_info,
+            monoclassruntimeinfo_domain_vtables,
         ).await?;
     }
 
@@ -472,6 +473,7 @@ async fn static_table_offsets_v2_v3(
     map_name_class_field_counts: BTreeMap<&str, (Address, u32, u32)>,
     monoclassdef_klass: i32,
     monoclass_runtime_info: i32,
+    monoclassruntimeinfo_domain_vtables: i32,
 ) -> Option<()> {
     // this V2/V3 monoclass_vtable_size is actually TypeDefinitionVTableSize
     let monoclass_vtable_size = [0x38, 0x54, 0x5C].into_iter().max_by_key(|&monoclass_vtable_size| {
@@ -489,7 +491,18 @@ async fn static_table_offsets_v2_v3(
         asr::print_message("BAD: vtable_size_score is not at maximum");
     }
     let monovtable_vtable = [0x28, 0x2C, 0x40, 0x48].into_iter().max_by_key(|&monovtable_vtable| {
-        0
+        let vtable_score: i32 = v2_v3_monovtable_vtable_score(
+            process,
+            deref_type,
+            &map_name_class_field_counts,
+            monoclassdef_klass,
+            monoclass_runtime_info,
+            monoclassruntimeinfo_domain_vtables,
+            monoclass_vtable_size,
+            monovtable_vtable
+        );
+        asr::print_message(&format!("{:?} monovtable_vtable: 0x{:X}, vtable_score: {}", version, monovtable_vtable, vtable_score));
+        vtable_score
     })?;
     Some(())
 }
@@ -772,6 +785,41 @@ fn v2_v3_monoclass_vtable_size_score(
     // asr::print_message(&format!("0x{:X?} {} {}", monoclass_vtable_size, k, vtable_size));
     if vtable_size != n { return 4; }
     5
+}
+
+fn v2_v3_monovtable_vtable_score(
+    process: &Process,
+    deref_type: DerefType,
+    map_name_class_field_counts: &BTreeMap<&str, (Address, u32, u32)>,
+    monoclassdef_klass: i32,
+    monoclass_runtime_info: i32,
+    monoclassruntimeinfo_domain_vtables: i32,
+    monoclass_vtable_size: i32,
+    monovtable_vtable: i32,
+) -> i32 {
+    let c = map_name_class_field_counts.get("UnSafeCharBuffer").unwrap().0;
+    let Ok(runtime_info) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_runtime_info) else {
+        return 0;
+    };
+    // It's okay to be null?
+    if runtime_info.is_null() {
+        return 2;
+    }
+    let Ok(vtables) = read_pointer(process, deref_type, runtime_info + monoclassruntimeinfo_domain_vtables) else {
+        return 0;
+    };
+    let Ok(vtable_size) = process.read::<u32>(c + monoclassdef_klass + monoclass_vtable_size) else {
+        return 0;
+    };
+    let vtables2 = vtables + monovtable_vtable;
+    let Ok(static_table) = read_pointer(process, deref_type, vtables2 + (vtable_size as u64).wrapping_mul(deref_type.size_of_ptr())) else {
+        return 0;
+    };
+    let Ok(a) = process.read::<u8>(static_table) else {
+        return 1;
+    };
+    asr::print_message(&format!("a: 0x{:X?}", a));
+    3
 }
 
 // --------------------------------------------------------
