@@ -728,7 +728,7 @@ fn v2_v3_monoclass_vtable_size_score(
     if vtable_size == 0 { return 1; }
     if vtable_size == 434 { return 2; }
     if 0x100 <= vtable_size { return 3; }
-    asr::print_message(&format!("{:X?} {} {}", monoclass_vtable_size, k, vtable_size));
+    asr::print_message(&format!("0x{:X?} {} {}", monoclass_vtable_size, k, vtable_size));
     if vtable_size != n { return 4; }
     5
 }
