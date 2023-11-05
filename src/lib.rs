@@ -58,10 +58,16 @@ const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 6] = [
     ("UnSafeCharBuffer", (3, 4)),
 ];
 
-const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[i32], &[u8])])]); 1] = [
+const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 1] = [
     ("Boolean", &[
-        ("TrueString", &[(&[0x10], &[0x04])]),
-        ("FalseString", &[(&[0x10], &[0x05])]),
+        ("TrueString", &[
+            (&[("String", "m_stringLength")], &[0x04]),
+            // (&[("String", "m_firstChar")], &[b'T']),
+        ]),
+        ("FalseString", &[
+            (&[("String", "m_stringLength")], &[0x05]),
+            // (&[("String", "m_firstChar")], &[b'F']),
+        ]),
     ]),
 ];
 
@@ -874,7 +880,7 @@ fn v2_v3_monovtable_vtable_score(
     monoclass_vtable_size: i32,
     monovtable_vtable: i32,
 ) -> Option<i32> {
-    let map_name_static_field_bytes: BTreeMap<&str, &[(&str, &[(&[i32], &[u8])])]> = BTreeMap::from(NAME_STATIC_FIELD_BYTES);
+    let map_name_static_field_bytes: BTreeMap<&str, &[(&str, &[(&[(&str, &str)], &[u8])])]> = BTreeMap::from(NAME_STATIC_FIELD_BYTES);
     for (k, sfbs) in map_name_static_field_bytes {
         let c = *map_name_class.get(k).unwrap();
         let Ok(runtime_info) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_runtime_info) else {
@@ -911,7 +917,13 @@ fn v2_v3_monovtable_vtable_score(
             };
             let mut a = static_table + offset;
             for (p, v) in bs.into_iter() {
-                for &o in p.into_iter() {
+                for &(vcn, vf) in p.into_iter() {
+                    let Some(&vc) = map_name_class.get(vcn) else {
+                        return Some(1);
+                    };
+                    let Some(o) = class_field_name_offset(process, deref_type, vc, vf, monoclassdef_klass, monoclassdef_field_count, monoclass_fields, monoclassfieldalignment, monoclassfield_name, monoclassfield_offset) else {
+                        return Some(1);
+                    };
                     let Ok(a2) = read_pointer(process, deref_type, a) else {
                         return Some(1);
                     };
