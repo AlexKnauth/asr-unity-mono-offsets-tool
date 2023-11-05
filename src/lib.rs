@@ -552,9 +552,28 @@ async fn static_table_offsets_v2_v3(
             monoclass_vtable_size,
             monovtable_vtable
         ).unwrap_or_default();
-        asr::print_message(&format!("{:?} monovtable_vtable: 0x{:X}, vtable_score: {}", version, monovtable_vtable, vtable_score));
+        // asr::print_message(&format!("{:?} monovtable_vtable: 0x{:X}, vtable_score: {}", version, monovtable_vtable, vtable_score));
         vtable_score
     })?;
+    let vtable_score: i32 = v2_v3_monovtable_vtable_score(
+        process,
+        deref_type,
+        &map_name_class,
+        monoclassdef_klass,
+        monoclassdef_field_count,
+        monoclass_fields,
+        monoclassfieldalignment,
+        monoclassfield_name,
+        monoclassfield_offset,
+        monoclass_runtime_info,
+        monoclassruntimeinfo_domain_vtables,
+        monoclass_vtable_size,
+        monovtable_vtable
+    ).unwrap_or_default();
+    asr::print_message(&format!("{:?} Offsets monovtable_vtable: 0x{:X}, vtable_score: {}", version, monovtable_vtable, vtable_score));
+    if vtable_score < 4 {
+        asr::print_message("BAD: vtable_score is not at maximum");
+    }
     Some(())
 }
 
@@ -903,7 +922,7 @@ fn v2_v3_monovtable_vtable_score(
                 let Ok(v_actual) = process.read::<[u8; 1]>(a) else {
                     return Some(2);
                 };
-                asr::print_message(&format!("v_acual: {:X?}, v: {:X?}", v_actual, v));
+                // asr::print_message(&format!("v_acual: {:X?}, v: {:X?}", v_actual, v));
                 if &v_actual != v { return Some(3); }
             }
         }
