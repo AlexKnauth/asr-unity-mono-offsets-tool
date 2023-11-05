@@ -381,7 +381,9 @@ async fn option_main(process: &Process) -> Option<()> {
     }).sum();
     asr::print_message(&format!("Offsets monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
     if runtime_info_score < 3 * default_classes.len() as i32 {
-        asr::print_message(&format!("BAD runtime_info_score: {} vs {}", runtime_info_score, 3 * default_classes.len()));
+        asr::print_message(&format!("BAD BAD runtime_info_score: {} vs {}", runtime_info_score, 3 * default_classes.len()));
+    } else if runtime_info_score == 3 * default_classes.len() as i32 {
+        asr::print_message(&format!("BAD runtime_info_score: they can't all be null, {} vs {}", runtime_info_score, 3 * default_classes.len()));
     }
 
     // TODO get_static_table:
@@ -639,13 +641,17 @@ fn monoclass_runtime_info_score(process: &Process, deref_type: DerefType, c: Add
     let Ok(runtime_info) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_runtime_info) else {
         return 0;
     };
+    // It's okay to be null?
+    if runtime_info.is_null() {
+        return 3;
+    }
     let Ok(vtables) = read_pointer(process, deref_type, runtime_info + monoclassruntimeinfo_domain_vtables) else {
         return 1;
     };
     if process.read::<u8>(vtables).is_err() {
         return 2;
     }
-    3
+    4
 }
 
 // --------------------------------------------------------
