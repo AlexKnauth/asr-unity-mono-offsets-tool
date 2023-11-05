@@ -432,9 +432,9 @@ async fn option_main(process: &Process) -> Option<()> {
     }).sum();
     asr::print_message(&format!("Offsets monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
     if runtime_info_score < 5 * default_classes.len() as i32 {
-        asr::print_message(&format!("BAD BAD runtime_info_score: {} vs {}", runtime_info_score, 3 * default_classes.len()));
+        asr::print_message(&format!("BAD BAD runtime_info_score: {} vs {}", runtime_info_score, 5 * default_classes.len()));
     } else if runtime_info_score == 5 * default_classes.len() as i32 {
-        asr::print_message(&format!("BAD runtime_info_score: they can't all be null, {} vs {}", runtime_info_score, 3 * default_classes.len()));
+        asr::print_message(&format!("BAD runtime_info_score: they can't all be null, {} vs {}", runtime_info_score, 5 * default_classes.len()));
     }
 
     next_tick().await;
