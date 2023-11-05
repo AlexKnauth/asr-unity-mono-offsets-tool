@@ -508,15 +508,15 @@ async fn static_table_offsets_v2_v3(
 ) -> Option<()> {
     // this V2/V3 monoclass_vtable_size is actually TypeDefinitionVTableSize
     let monoclass_vtable_size = [0x38, 0x54, 0x5C].into_iter().max_by_key(|&monoclass_vtable_size| {
-        let vtable_size_score: i32 = map_name_class_field_counts.iter().map(|(&k, &(c, _, n))| {
-            v2_v3_monoclass_vtable_size_score(process, monoclassdef_klass, monoclass_vtable_size, k, c, n)
+        let vtable_size_score: i32 = map_name_class_field_counts.values().map(|&(c, _, n)| {
+            v2_v3_monoclass_vtable_size_score(process, monoclassdef_klass, monoclass_vtable_size, c, n)
         }).sum();
         // asr::print_message(&format!("{:?} monoclass_vtable_size (TypeDefinitionVTableSize): 0x{:X}, vtable_size_score: {}", version, monoclass_vtable_size, vtable_size_score));
         vtable_size_score
     })?;
     asr::print_message(&format!("{:?} Offsets monoclass_vtable_size (TypeDefinitionVTableSize): 0x{:X}", version, monoclass_vtable_size));
-    let vtable_size_score: i32 = map_name_class_field_counts.iter().map(|(&k, &(c, _, n))| {
-        v2_v3_monoclass_vtable_size_score(process, monoclassdef_klass, monoclass_vtable_size, k, c, n)
+    let vtable_size_score: i32 = map_name_class_field_counts.values().map(|&(c, _, n)| {
+        v2_v3_monoclass_vtable_size_score(process, monoclassdef_klass, monoclass_vtable_size, c, n)
     }).sum();
     if vtable_size_score < 5 * map_name_class_field_counts.len() as i32 {
         asr::print_message("BAD: vtable_size_score is not at maximum");
@@ -529,25 +529,6 @@ async fn static_table_offsets_v2_v3(
         };
         if !map_name_class.contains_key(&k) {
             map_name_class.insert(k, c);
-        }
-    }
-    for (&ref k, &c) in map_name_class.iter() {
-        if k != "Boolean" { continue; }
-        let Ok(field_count) = process.read::<u32>(c + monoclassdef_field_count) else {
-            continue;
-        };
-        let Ok(fields) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_fields) else {
-            continue;
-        };
-        if fields.is_null() { continue; }
-        for i in 0..field_count {
-            let field = fields + i.wrapping_mul(monoclassfieldalignment as u32);
-            let name_addr = read_pointer(process, deref_type, field + monoclassfield_name).ok()?;
-            let name_cstr = process.read::<ArrayCString<CSTR>>(name_addr).ok()?;
-            let name_str = std::str::from_utf8(&name_cstr).ok()?;
-            if !["TrueString", "FalseString"].contains(&name_str) { continue; }
-            let offset = process.read::<u32>(field + monoclassfield_offset).ok()?;
-            asr::print_message(&format!("{}: {}: 0x{:X?}", k, name_str, offset));
         }
     }
     /*
@@ -842,7 +823,6 @@ fn v2_v3_monoclass_vtable_size_score(
     process: &Process,
     monoclassdef_klass: i32,
     monoclass_vtable_size: i32,
-    k: &str,
     c: Address,
     n: u32,
 ) -> i32 {
@@ -852,7 +832,6 @@ fn v2_v3_monoclass_vtable_size_score(
     if vtable_size == 0 { return 1; }
     if vtable_size == 434 { return 2; }
     if 0x100 <= vtable_size { return 3; }
-    // asr::print_message(&format!("0x{:X?} {} {}", monoclass_vtable_size, k, vtable_size));
     if vtable_size != n { return 4; }
     5
 }
