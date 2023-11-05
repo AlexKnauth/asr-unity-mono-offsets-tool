@@ -114,8 +114,12 @@ async fn option_main(process: &Process) -> Option<()> {
     };
     asr::print_message(&format!("deref_type: {:?}", deref_type));
 
+    next_tick().await;
+
     let version = detect_version(process, mono_name)?;
     asr::print_message(&format!("version: {:?}", version));
+
+    next_tick().await;
 
     let mono_assembly_foreach_address = match format {
         BinaryFormat::PE => {
@@ -137,6 +141,8 @@ async fn option_main(process: &Process) -> Option<()> {
         }
     };
     asr::print_message(&format!("mono_assembly_foreach_address: {}", mono_assembly_foreach_address));
+
+    next_tick().await;
 
     let assemblies_pointer: Address = match (deref_type, format) {
         (DerefType::Bit64, BinaryFormat::PE) => {
@@ -182,6 +188,8 @@ async fn option_main(process: &Process) -> Option<()> {
     let assemblies: Address = read_pointer(process, deref_type, assemblies_pointer).ok()?;
     asr::print_message(&format!("assemblies: {}", assemblies));
 
+    next_tick().await;
+
     let first_assembly_data = read_pointer(process, deref_type, assemblies).ok()?;
     // asr::print_message(&format!("first_assembly_data: {}", first_assembly_data));
 
@@ -196,6 +204,8 @@ async fn option_main(process: &Process) -> Option<()> {
     if let Some(name_str) = monoassembly_aname_string(process, deref_type, first_assembly_data, monoassembly_aname) {
         asr::print_message(&format!("name_str: {}", name_str));
     }
+
+    next_tick().await;
 
     let default_assembly = assemblies_iter(process, deref_type, assemblies).find(|&assembly| {
         monoassembly_aname_string(process, deref_type, assembly, monoassembly_aname).as_deref() == Some("Assembly-CSharp")
@@ -213,6 +223,8 @@ async fn option_main(process: &Process) -> Option<()> {
     let default_image = read_pointer(process, deref_type, default_assembly + monoassembly_image).ok()?;
     // asr::print_message(&format!("default_image: {}", default_image));
 
+    next_tick().await;
+
     // Hard to guess both monoimage_class_cache and monointernalhashtable_size at the same time.
     // So make an assumption about monointernalhashtable_size based on 64-bit vs 32-bit.
     let monointernalhashtable_size = match deref_type {
@@ -226,6 +238,8 @@ async fn option_main(process: &Process) -> Option<()> {
         DerefType::Bit64 => 0x20,
     };
     asr::print_message(&format!("Offsets monointernalhashtable_table: 0x{:X?}, from {:?}", monointernalhashtable_table, deref_type));
+
+    next_tick().await;
 
     let monoimage_class_cache = [0x2A0, 0x354, 0x35C, 0x3D0, 0x4C0, 0x4D0].into_iter().max_by_key(|&monoimage_class_cache| {
         monoimage_class_cache_score(process, deref_type, default_image, monoimage_class_cache, monointernalhashtable_size, monointernalhashtable_table)
@@ -243,6 +257,8 @@ async fn option_main(process: &Process) -> Option<()> {
     // asr::print_message(&format!("table: {}", table));
     let class = read_pointer(process, deref_type, table).ok()?;
     // asr::print_message(&format!("class: {}", class));
+
+    next_tick().await;
 
     // Plan:
     //  * Find some class-related offsets first.
@@ -263,6 +279,8 @@ async fn option_main(process: &Process) -> Option<()> {
     }
     
 
+    next_tick().await;
+
     let monoclassdef_next_class_cache = [0xA0, 0xA8, 0xF8, 0x100, 0x108].into_iter().max_by_key(|&monoclassdef_next_class_cache| {
         let next_class_cache_score = monoclassdef_next_class_cache_score(process, deref_type, table_addr, class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name, monoclass_name_space);
         // asr::print_message(&format!("monoclassdef_next_class_cache: 0x{:X?}, next_class_cache_score: {}", monoclassdef_next_class_cache, next_class_cache_score));
@@ -274,12 +292,16 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message("BAD: next_class_cache_score is not at maximum");
     }
 
+    next_tick().await;
+
     let mscorlib_assembly = assemblies_iter(process, deref_type, assemblies).find(|&assembly| {
         monoassembly_aname_string(process, deref_type, assembly, monoassembly_aname).as_deref() == Some("mscorlib")
     })?;
     let mscorlib_image = read_pointer(process, deref_type, mscorlib_assembly + monoassembly_image).ok()?;
     let mscorlib_class_cache_size = process.read::<i32>(mscorlib_image + monoimage_class_cache + monointernalhashtable_size).ok()?;
     let mscorlib_table_addr = read_pointer(process, deref_type, mscorlib_image + monoimage_class_cache + monointernalhashtable_table).ok()?;
+
+    next_tick().await;
 
     let map_name_field_counts: BTreeMap<&str, (u32, u32)> = BTreeMap::from(NAME_FIELD_COUNTS);
     let mut map_name_class_field_counts: BTreeMap<&str, (Address, u32, u32)> = BTreeMap::new();
@@ -291,6 +313,8 @@ async fn option_main(process: &Process) -> Option<()> {
             map_name_class_field_counts.insert(k, (class, v1, v2));
         }
     }
+
+    next_tick().await;
 
     let monoclassdef_field_count = [0x64, 0x8C, 0x94, 0x9C, 0xA4, 0xF0, 0xF8, 0x100].into_iter().max_by_key(|&monoclassdef_field_count| {
         let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n, _)| {
@@ -306,6 +330,8 @@ async fn option_main(process: &Process) -> Option<()> {
     if field_count_score < 4 * map_name_class_field_counts.len() as i32 {
         asr::print_message("BAD: field_count_score is not at maximum");
     }
+
+    next_tick().await;
 
     // Hard to guess both monoclass_fields and monoclassfieldalignment at the same time.
     // So make an assumption about monoclassfieldalignment based on 64-bit vs 32-bit.
@@ -327,6 +353,8 @@ async fn option_main(process: &Process) -> Option<()> {
     };
     asr::print_message(&format!("Offsets monoclassfield_offset: 0x{:X?}, from {:?}", monoclassfield_offset, deref_type));
 
+    next_tick().await;
+
     let monoclass_fields = [0x60, 0x74, 0x90, 0x98, 0xA0, 0xA8].into_iter().max_by_key(|&monoclass_fields| {
         let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1, _)| {
             let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1);
@@ -344,7 +372,11 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message("BAD: fields_score is not at maximum");
     }
 
+    next_tick().await;
+
     let default_classes: BTreeSet<Address> = classes_iter(process, deref_type, table_addr, class_cache_size, monoclassdef_next_class_cache).collect();
+
+    next_tick().await;
 
     let monoclass_parent = [0x20, 0x24, 0x28, 0x30].into_iter().max_by_key(|&monoclass_parent| {
         let parent_score: i32 = default_classes.iter().map(|&c| {
