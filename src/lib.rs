@@ -451,17 +451,15 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message("UNUSED / UNCONSTRAINED monovtable_vtable");
         static_table_offsets_v1(deref_type).await?;
     } else {
+        let map_name_class = classes_map(process, deref_type, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name);
         static_table_offsets_v2_v3(
             process,
             deref_type,
             version,
-            mscorlib_table_addr,
-            mscorlib_class_cache_size,
+            map_name_class,
             map_name_class_field_counts,
             monoclassdef_klass,
-            monoclassdef_next_class_cache,
             monoclassdef_field_count,
-            monoclass_name,
             monoclass_fields,
             monoclassfieldalignment,
             monoclassfield_name,
@@ -492,13 +490,10 @@ async fn static_table_offsets_v2_v3(
     process: &Process,
     deref_type: DerefType,
     version: mono::Version,
-    mscorlib_table_addr: Address,
-    mscorlib_class_cache_size: i32,
+    map_name_class: BTreeMap<String, Address>,
     map_name_class_field_counts: BTreeMap<&str, (Address, u32, u32)>,
     monoclassdef_klass: i32,
-    monoclassdef_next_class_cache: i32,
     monoclassdef_field_count: i32,
-    monoclass_name: i32,
     monoclass_fields: i32,
     monoclassfieldalignment: i32,
     monoclassfield_name: i32,
@@ -522,7 +517,6 @@ async fn static_table_offsets_v2_v3(
         asr::print_message("BAD: vtable_size_score is not at maximum");
     }
 
-    let map_name_class = classes_map(process, deref_type, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name);
     /*
     TimeSpan: MaxValue: 0x8  = new TimeSpan(Int64.MaxValue)
     TimeSpan: MinValue: 0x10 = new TimeSpan(Int64.MinValue)
