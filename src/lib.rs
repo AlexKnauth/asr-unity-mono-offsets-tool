@@ -522,15 +522,7 @@ async fn static_table_offsets_v2_v3(
         asr::print_message("BAD: vtable_size_score is not at maximum");
     }
 
-    let mut map_name_class: BTreeMap<String, Address> = BTreeMap::new();
-    for c in classes_iter(process, deref_type, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_next_class_cache) {
-        let Some(k) = class_name(process, deref_type, c, monoclassdef_klass, monoclass_name) else {
-            continue;
-        };
-        if !map_name_class.contains_key(&k) {
-            map_name_class.insert(k, c);
-        }
-    }
+    let map_name_class = classes_map(process, deref_type, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name);
     /*
     TimeSpan: MaxValue: 0x8  = new TimeSpan(Int64.MaxValue)
     TimeSpan: MinValue: 0x10 = new TimeSpan(Int64.MinValue)
@@ -975,6 +967,27 @@ fn classes_iter<'a>(
             }
         })
     })
+}
+
+fn classes_map(
+    process: &Process,
+    deref_type: DerefType,
+    table_addr: Address,
+    class_cache_size: i32,
+    monoclassdef_klass: i32,
+    monoclassdef_next_class_cache: i32,
+    monoclass_name: i32,
+) -> BTreeMap<String, Address> {
+    let mut map_name_class: BTreeMap<String, Address> = BTreeMap::new();
+    for c in classes_iter(process, deref_type, table_addr, class_cache_size, monoclassdef_next_class_cache) {
+        let Some(k) = class_name(process, deref_type, c, monoclassdef_klass, monoclass_name) else {
+            continue;
+        };
+        if !map_name_class.contains_key(&k) {
+            map_name_class.insert(k, c);
+        }
+    }
+    map_name_class
 }
 
 fn class_field_name_offset(
