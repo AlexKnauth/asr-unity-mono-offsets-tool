@@ -58,7 +58,7 @@ const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 6] = [
     ("UnSafeCharBuffer", (3, 4)),
 ];
 
-const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 9] = [
+const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 10] = [
     ("Boolean", &[
         ("TrueString", &[
             (&[("String", "m_stringLength")], &[0x04]),
@@ -100,6 +100,15 @@ const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 
     ]),
     ("TimeZone", &[
         ("currentTimeZone", &[]),
+    ]),
+    ("Type", &[
+        ("FilterAttribute", &[]),
+        ("FilterName", &[]),
+        ("FilterNameIgnoreCase", &[]),
+        ("Missing", &[]),
+        ("Delimiter", &[]),
+        ("EmptyTypes", &[]),
+        ("defaultBinder", &[]),
     ]),
 ];
 
