@@ -316,12 +316,11 @@ async fn option_main(process: &Process) -> Option<()> {
 
     next_tick().await;
 
+    let map_name_class = classes_map(process, deref_type, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name);
+
     let map_name_field_counts: BTreeMap<&str, (u32, u32)> = BTreeMap::from(NAME_FIELD_COUNTS);
     let mut map_name_class_field_counts: BTreeMap<&str, (Address, u32, u32)> = BTreeMap::new();
-    for class in classes_iter(process, deref_type, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_next_class_cache) {
-        let Some(name) = class_name(process, deref_type, class, monoclassdef_klass, monoclass_name) else {
-            break;
-        };
+    for (name, &class) in map_name_class.iter() {
         if let Some((&k, &(v1, v2))) = map_name_field_counts.get_key_value(name.as_str()) {
             map_name_class_field_counts.insert(k, (class, v1, v2));
         }
@@ -451,7 +450,6 @@ async fn option_main(process: &Process) -> Option<()> {
         asr::print_message("UNUSED / UNCONSTRAINED monovtable_vtable");
         static_table_offsets_v1(deref_type).await?;
     } else {
-        let map_name_class = classes_map(process, deref_type, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name);
         static_table_offsets_v2_v3(
             process,
             deref_type,
