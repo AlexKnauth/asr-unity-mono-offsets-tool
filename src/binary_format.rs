@@ -52,7 +52,8 @@ fn bytes_detect_binary_format(bytes: &[u8]) -> Option<BinaryFormat> {
     } else if bytes.starts_with(&[0xFE, 0xED, 0xFA, 0xCE])
            || bytes.starts_with(&[0xFE, 0xED, 0xFA, 0xCF])
            || bytes.starts_with(&[0xCE, 0xFA, 0xED, 0xFE])
-           || bytes.starts_with(&[0xCF, 0xFA, 0xED, 0xFE]) {
+           || bytes.starts_with(&[0xCF, 0xFA, 0xED, 0xFE])
+           || bytes.starts_with(&[0xCA, 0xFE, 0xBA, 0xBE]) {
         Some(BinaryFormat::MachO)
     } else {
         None
