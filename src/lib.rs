@@ -470,17 +470,15 @@ async fn option_main(process: &Process) -> Option<()> {
         let runtime_info_score: i32 = map_name_class_w_static.values().map(|&c| {
             monoclass_runtime_info_score(process, deref_type, c, monoclass_runtime_info, monoclassdef_klass, monoclassruntimeinfo_domain_vtables)
         }).sum();
-        asr::print_message(&format!("monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
+        // asr::print_message(&format!("monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
         runtime_info_score
     })?;
     let runtime_info_score: i32 = map_name_class_w_static.values().map(|&c| {
         monoclass_runtime_info_score(process, deref_type, c, monoclass_runtime_info, monoclassdef_klass, monoclassruntimeinfo_domain_vtables)
     }).sum();
     asr::print_message(&format!("Offsets monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
-    if runtime_info_score < 5 * map_name_class_w_static.len() as i32 {
-        asr::print_message(&format!("BAD BAD runtime_info_score: {} vs {}", runtime_info_score, 5 * map_name_class_w_static.len()));
-    } else if runtime_info_score == 5 * map_name_class_w_static.len() as i32 {
-        asr::print_message(&format!("BAD runtime_info_score: they can't all be null, {} vs {}", runtime_info_score, 5 * map_name_class_w_static.len()));
+    if runtime_info_score < 6 * map_name_class_w_static.len() as i32 {
+        asr::print_message(&format!("BAD runtime_info_score: {} vs {}", runtime_info_score, 6 * map_name_class_w_static.len()));
     }
 
     next_tick().await;
