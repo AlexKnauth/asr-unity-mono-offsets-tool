@@ -470,7 +470,7 @@ async fn option_main(process: &Process) -> Option<()> {
         let runtime_info_score: i32 = map_name_class_w_static.values().map(|&c| {
             monoclass_runtime_info_score(process, deref_type, c, monoclass_runtime_info, monoclassdef_klass, monoclassruntimeinfo_domain_vtables)
         }).sum();
-        // asr::print_message(&format!("monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
+        asr::print_message(&format!("monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
         runtime_info_score
     })?;
     let runtime_info_score: i32 = map_name_class_w_static.values().map(|&c| {
