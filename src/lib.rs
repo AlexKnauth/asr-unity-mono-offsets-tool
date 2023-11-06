@@ -58,7 +58,7 @@ const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 6] = [
     ("UnSafeCharBuffer", (3, 4)),
 ];
 
-const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 10] = [
+const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 9] = [
     ("Boolean", &[
         ("TrueString", &[
             (&[("String", "m_stringLength")], &[0x04]),
@@ -77,16 +77,6 @@ const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 
         ("DaysToMonth366", &[]),
         ("MinValue", &[]),
         ("MaxValue", &[]),
-    ]),
-    ("Decimal", &[
-        ("Powers10", &[]),
-        ("Zero", &[]),
-        ("One", &[]),
-        ("MinusOne", &[]),
-        ("MaxValue", &[]),
-        ("MinValue", &[]),
-        ("NearNegativeZero", &[]),
-        ("NearPositiveZero", &[]),
     ]),
     ("Enum", &[
         ("enumSeperatorCharArray", &[]),
