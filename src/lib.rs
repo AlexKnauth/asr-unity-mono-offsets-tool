@@ -58,7 +58,7 @@ const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 6] = [
     ("UnSafeCharBuffer", (3, 4)),
 ];
 
-const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 1] = [
+const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 10] = [
     ("Boolean", &[
         ("TrueString", &[
             (&[("String", "m_stringLength")], &[0x04]),
@@ -68,6 +68,48 @@ const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 
             (&[("String", "m_stringLength")], &[0x05]),
             // (&[("String", "m_firstChar")], &[b'F']),
         ]),
+    ]),
+    ("Char", &[
+        ("categoryForLatin1", &[]),
+    ]),
+    ("DateTime", &[
+        ("DaysToMonth365", &[]),
+        ("DaysToMonth366", &[]),
+        ("MinValue", &[]),
+        ("MaxValue", &[]),
+    ]),
+    ("Decimal", &[
+        ("Powers10", &[]),
+        ("Zero", &[]),
+        ("One", &[]),
+        ("MinusOne", &[]),
+        ("MaxValue", &[]),
+        ("MinValue", &[]),
+        ("NearNegativeZero", &[]),
+        ("NearPositiveZero", &[]),
+    ]),
+    ("Enum", &[
+        ("enumSeperatorCharArray", &[]),
+    ]),
+    ("IntPtr", &[
+        ("Zero", &[]),
+    ]),
+    ("Math", &[
+        ("doubleRoundLimit", &[]),
+        ("roundPower10Double", &[]),
+    ]),
+    ("String", &[
+        ("Empty", &[
+            (&[("String", "m_stringLength")], &[0x00]),
+        ]),
+    ]),
+    ("TimeSpan", &[
+        ("Zero", &[]),
+        ("MaxValue", &[]),
+        ("MinValue", &[]),
+    ]),
+    ("TimeZone", &[
+        ("currentTimeZone", &[]),
     ]),
 ];
 
