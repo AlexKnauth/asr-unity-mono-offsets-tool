@@ -77,24 +77,26 @@ pub fn detect_deref_type(process: &Process, module_range: (Address, u64)) -> Opt
 
 /// Finds the address of a function from a MachO module range and file contents.
 pub fn get_function_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
-    asr::print_message("macho get_function_address: before scan_macho_page");
+    // asr::print_message("macho get_function_address: before scan_macho_page");
+    // NOTE: this page address is probably ONLY good for the header, NOT the function address
     let page = scan_macho_page(process, range)?;
     let header: [u8; HEADER_SIZE] = process.read(page).ok()?;
     let header_offset = memchr::memmem::find(macho_bytes, &header)?;
     let macho_bytes2 = &macho_bytes[header_offset..];
-    asr::print_message("macho get_function_address: before get_function_offset");
+    // asr::print_message("macho get_function_address: before get_function_offset");
     let function_offset: u32 = get_function_offset(&macho_bytes2, function_name)?;
-    asr::print_message(&format!("macho get_function_address: function_offset: 0x{:X?}", function_offset));
+    // asr::print_message(&format!("macho get_function_address: function_offset: 0x{:X?}", function_offset));
+    // NOTE: function_address_via_page is probably NOT the right address
     let function_address_via_page = page + function_offset;
-    asr::print_message(&format!("macho get_function_address: function_address_via_page: {}", function_address_via_page));
+    // asr::print_message(&format!("macho get_function_address: function_address_via_page: {}", function_address_via_page));
     let bytes_via_page: [u8; 0x100] = process.read(function_address_via_page).ok()?;
     let bytes_expected: [u8; 0x100] = slice_read(&macho_bytes2, function_offset as usize).ok()?;
     if bytes_via_page != bytes_expected {
-        asr::print_message("BAD: bytes_via_page != bytes_expected");
+        // asr::print_message("BAD: bytes_via_page != bytes_expected");
     }
     let signature: Signature<0x100> = Signature::Simple(bytes_expected);
     let function_address_expected = signature.scan_process_range(process, range)?;
-    asr::print_message(&format!("macho get_function_address: function_address_expected: {}", function_address_expected));
+    // asr::print_message(&format!("macho get_function_address: function_address_expected: {}", function_address_expected));
     Some(function_address_expected)
 }
 

@@ -348,7 +348,7 @@ async fn option_main(process: &Process) -> Option<()> {
     asr::print_message(&format!("Offsets monoclassdef_klass: 0x{:X?}, ASSUMED", monoclassdef_klass));
     let (monoclass_name, monoclass_name_space) = [(0x2C, 0x30), (0x30, 0x34), (0x38, 0x40), (0x40, 0x48), (0x48, 0x50)].into_iter().max_by_key(|&(monoclass_name, monoclass_name_space)| {
         let class_name_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
-        asr::print_message(&format!("monoclass_name: 0x{:X?} space: 0x{:X?}, class_name_score: {} / 9", monoclass_name, monoclass_name_space, class_name_score));
+        // asr::print_message(&format!("monoclass_name: 0x{:X?} space: 0x{:X?}, class_name_score: {} / 9", monoclass_name, monoclass_name_space, class_name_score));
         class_name_score
     })?;
     let class_name_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
@@ -362,7 +362,7 @@ async fn option_main(process: &Process) -> Option<()> {
 
     let monoclassdef_next_class_cache = [0xA0, 0xA8, 0xF8, 0x100, 0x108].into_iter().max_by_key(|&monoclassdef_next_class_cache| {
         let next_class_cache_score = monoclassdef_next_class_cache_score(process, deref_type, table_addr, class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name, monoclass_name_space);
-        asr::print_message(&format!("monoclassdef_next_class_cache: 0x{:X?}, next_class_cache_score: {}", monoclassdef_next_class_cache, next_class_cache_score));
+        // asr::print_message(&format!("monoclassdef_next_class_cache: 0x{:X?}, next_class_cache_score: {}", monoclassdef_next_class_cache, next_class_cache_score));
         next_class_cache_score
     })?;
     let next_class_cache_score = monoclassdef_next_class_cache_score(process, deref_type, table_addr, class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name, monoclass_name_space);
@@ -398,7 +398,7 @@ async fn option_main(process: &Process) -> Option<()> {
         let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n, _)| {
             monoclassdef_field_count_score(process, deref_type, c, n, monoclassdef_field_count, monoclassdef_next_class_cache)
         }).sum();
-        asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
+        // asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
         field_count_score
     })?;
     let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n, _)| {
@@ -438,7 +438,7 @@ async fn option_main(process: &Process) -> Option<()> {
             let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1);
             monoclass_fields_score(process, deref_type, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
         }).sum();
-        asr::print_message(&format!("monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
+        // asr::print_message(&format!("monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
         fields_score
     })?;
     let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1, _)| {
@@ -464,7 +464,7 @@ async fn option_main(process: &Process) -> Option<()> {
         let parent_score: i32 = parent_score_classes.iter().map(|&c| {
             monoclass_parent_score(process, deref_type, c, monoclass_parent, monoclassdef_klass, monoclass_name)
         }).sum();
-        asr::print_message(&format!("monoclass_parent: 0x{:X?}, parent_score: {}", monoclass_parent, parent_score));
+        // asr::print_message(&format!("monoclass_parent: 0x{:X?}, parent_score: {}", monoclass_parent, parent_score));
         parent_score
     })?;
     let parent_score: i32 = parent_score_classes.iter().map(|&c| {
@@ -498,7 +498,7 @@ async fn option_main(process: &Process) -> Option<()> {
         let runtime_info_score: i32 = map_name_class_w_static.values().map(|&c| {
             monoclass_runtime_info_score(process, deref_type, c, monoclass_runtime_info, monoclassdef_klass, monoclassruntimeinfo_domain_vtables)
         }).sum();
-        asr::print_message(&format!("monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
+        // asr::print_message(&format!("monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
         runtime_info_score
     })?;
     let runtime_info_score: i32 = map_name_class_w_static.values().map(|&c| {
