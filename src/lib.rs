@@ -188,7 +188,7 @@ async fn option_main(process: &Process) -> Option<()> {
         },
         BinaryFormat::ELF => {
             let mono_bytes = file_read_all_bytes(mono_path).ok()?;
-            elf::get_function_address(process, mono_range, &mono_bytes, b"mono_assembly_foreach")?
+            elf::get_function_symbol_address(process, mono_range, &mono_bytes, b"mono_assembly_foreach")?
         },
         BinaryFormat::MachO => {
             let mono_bytes = file_read_all_bytes(mono_path).ok()?;

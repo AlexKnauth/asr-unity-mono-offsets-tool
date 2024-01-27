@@ -1,12 +1,14 @@
 use core::mem;
 
-use asr::{Process, Address, file_format::elf::Info};
+use asr::{file_format::elf::Info, Address, Process};
 pub use asr::file_format::elf;
 use bytemuck::{Pod, Zeroable};
 
 use crate::binary_format::DerefType;
 
 // --------------------------------------------------------
+
+const CSTR: usize = 128;
 
 // Section Header Type: Symbol Table
 const SHT_SYMTAB: u32 = 0x2;
@@ -116,6 +118,41 @@ pub fn detect_deref_type(process: &Process, module_range: (Address, u64)) -> Opt
         Some(DerefType::Bit32)
     } else {
         None
+    }
+}
+
+
+pub fn get_function_symbol_address(process: &Process, range: (Address, u64), elf_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
+    let ma = get_function_address(process, range, elf_bytes, function_name);
+    let mb = elf::symbols(process, range.0).find_map(|s| -> Option<Address> {
+        let n = s.get_name::<CSTR>(process).ok()?;
+        if n.matches(function_name) {
+            Some(s.address)
+        } else {
+            None
+        }
+    });
+    match (ma, mb) {
+        (Some(a), Some(b)) => {
+            if a == b {
+                asr::print_message(&format!("elf::get_function_symbol_address: all good, both Some and equal"));
+            } else {
+                asr::print_message(&format!("elf::get_function_symbol_address: mismatch, {} != {}", a, b));
+            }
+            Some(a)
+        }
+        (Some(a), None) => {
+            asr::print_message("elf::get_function_symbol_address: only get_function_address worked");
+            Some(a)
+        }
+        (None, Some(b)) => {
+            asr::print_message("elf::get_function_symbol_address: only elf::symbols worked");
+            Some(b)
+        }
+        (None, None) => {
+            asr::print_message("elf::get_function_symbol_address: both failed");
+            None
+        }
     }
 }
 
