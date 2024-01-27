@@ -28,8 +28,8 @@ const PROCESS_NAMES: [&str; 8] = [
     "Hollow Knight",
     "hollow_knight",
     "hollow_knight.exe",
-    "hollow_knight.x",
     "hollow_knight.x86_64",
+    "hollow_knight.x",
     "SuperliminalSteam",
     "SuperliminalSteam.exe",
 ];
