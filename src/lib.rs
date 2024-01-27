@@ -49,6 +49,28 @@ const UNITY_PLAYER_NAMES: [&str; 3] = [
     "UnityPlayer.dylib",
 ];
 
+static EXCLUDE_PARENT_SCORE: [&str; 19] = [
+    "IDisengageHandler",
+    "InputControlSource",
+    "ISpriteCollectionForceBuild",
+    "IHitEffectReciever",
+    "IInputControl",
+    "IExternalDebris",
+    "IExtraDamageable",
+    "IHitResponder",
+    "IVibrationMixerProvider",
+    "BindingSourceListener",
+    "ISharedData",
+    "IUpdateable",
+    "IBossStatueToggle",
+    "IFsmCollider2DStateAction",
+    "ITweenValue",
+    "IMenuOptionLayout",
+    "ITextElement",
+    "IMenuOptionListSetting",
+    "<Module>",
+];
+
 // expect class_int32 to have 3 fields
 const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 6] = [
     ("Byte", (3, 25)),
@@ -252,7 +274,7 @@ async fn option_main(process: &Process) -> Option<()> {
         address_aname_score(process, deref_type, first_assembly_data + monoassembly_aname)
     })?;
     let aname_score = address_aname_score(process, deref_type, first_assembly_data + monoassembly_aname);
-    asr::print_message(&format!("Offsets monoassembly_aname: 0x{:X?}, aname_score: {}", monoassembly_aname, aname_score));
+    asr::print_message(&format!("Offsets monoassembly_aname: 0x{:X?}, aname_score: {} / 5", monoassembly_aname, aname_score));
     if aname_score < 5 {
         asr::print_message("BAD: aname_score is not at maximum");
     }
@@ -271,7 +293,7 @@ async fn option_main(process: &Process) -> Option<()> {
         address_image_score(process, deref_type, default_assembly + monoassembly_image)
     })?;
     let image_score = address_image_score(process, deref_type, default_assembly + monoassembly_image);
-    asr::print_message(&format!("Offsets monoassembly_image: 0x{:X?}, image_score: {}", monoassembly_image, image_score));
+    asr::print_message(&format!("Offsets monoassembly_image: 0x{:X?}, image_score: {} / 5", monoassembly_image, image_score));
     if image_score < 5 {
         asr::print_message("BAD: image_score is not at maximum");
     }
@@ -300,7 +322,7 @@ async fn option_main(process: &Process) -> Option<()> {
         monoimage_class_cache_score(process, deref_type, default_image, monoimage_class_cache, monointernalhashtable_size, monointernalhashtable_table)
     })?;
     let class_cache_score = monoimage_class_cache_score(process, deref_type, default_image, monoimage_class_cache, monointernalhashtable_size, monointernalhashtable_table);
-    asr::print_message(&format!("Offsets monoimage_class_cache: 0x{:X?}, class_cache_score: {}", monoimage_class_cache, class_cache_score));
+    asr::print_message(&format!("Offsets monoimage_class_cache: 0x{:X?}, class_cache_score: {} / 8", monoimage_class_cache, class_cache_score));
     if class_cache_score < 8 {
         asr::print_message("BAD: class_cache_score is not at maximum");
     }
@@ -328,7 +350,7 @@ async fn option_main(process: &Process) -> Option<()> {
         monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space)
     })?;
     let class_name_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
-    asr::print_message(&format!("Offsets monoclass_name: 0x{:X?}, class_name_score: {}", monoclass_name, class_name_score));
+    asr::print_message(&format!("Offsets monoclass_name: 0x{:X?}, class_name_score: {} / 7", monoclass_name, class_name_score));
     if class_name_score < 7 {
         asr::print_message("BAD: class_name_score is not at maximum");
     }
@@ -342,7 +364,7 @@ async fn option_main(process: &Process) -> Option<()> {
         next_class_cache_score
     })?;
     let next_class_cache_score = monoclassdef_next_class_cache_score(process, deref_type, table_addr, class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name, monoclass_name_space);
-    asr::print_message(&format!("Offsets monoclassdef_next_class_cache: 0x{:X?}, next_class_cache_score: {}", monoclassdef_next_class_cache, next_class_cache_score));
+    asr::print_message(&format!("Offsets monoclassdef_next_class_cache: 0x{:X?}, next_class_cache_score: {} / 12", monoclassdef_next_class_cache, next_class_cache_score));
     if next_class_cache_score < 12 {
         asr::print_message("BAD: next_class_cache_score is not at maximum");
     }
@@ -380,7 +402,7 @@ async fn option_main(process: &Process) -> Option<()> {
     let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n, _)| {
         monoclassdef_field_count_score(process, deref_type, c, n, monoclassdef_field_count, monoclassdef_next_class_cache)
     }).sum();
-    asr::print_message(&format!("Offsets monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
+    asr::print_message(&format!("Offsets monoclassdef_field_count: 0x{:X?}, field_count_score: {} / {}", monoclassdef_field_count, field_count_score, 4 * map_name_class_field_counts.len()));
     if field_count_score < 4 * map_name_class_field_counts.len() as i32 {
         asr::print_message("BAD: field_count_score is not at maximum");
     }
@@ -421,7 +443,7 @@ async fn option_main(process: &Process) -> Option<()> {
         let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1);
         monoclass_fields_score(process, deref_type, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
     }).sum();
-    asr::print_message(&format!("Offsets monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
+    asr::print_message(&format!("Offsets monoclass_fields: 0x{:X?}, fields_score: {} / {}", monoclass_fields, fields_score, 5 * map_name_class_field_counts.len()));
     if fields_score < 5 * map_name_class_field_counts.len() as i32 {
         asr::print_message("BAD: fields_score is not at maximum");
     }
@@ -432,21 +454,25 @@ async fn option_main(process: &Process) -> Option<()> {
 
     next_tick().await;
 
+    let parent_score_classes: BTreeSet<Address> = default_classes.iter().filter(|&&c| {
+        let n = class_name(process, deref_type, c, monoclassdef_klass, monoclass_name).unwrap_or("<unknown>".to_string());
+        !EXCLUDE_PARENT_SCORE.contains(&n.as_str())
+    }).cloned().collect();
     let monoclass_parent = [0x20, 0x24, 0x28, 0x30].into_iter().max_by_key(|&monoclass_parent| {
-        let parent_score: i32 = default_classes.iter().map(|&c| {
+        let parent_score: i32 = parent_score_classes.iter().map(|&c| {
             monoclass_parent_score(process, deref_type, c, monoclass_parent, monoclassdef_klass, monoclass_name)
         }).sum();
-        // asr::print_message(&format!("monoclass_parent: 0x{:X?}, parent_score: {}", monoclass_parent, parent_score));
+        asr::print_message(&format!("monoclass_parent: 0x{:X?}, parent_score: {}", monoclass_parent, parent_score));
         parent_score
     })?;
-    let parent_score: i32 = default_classes.iter().map(|&c| {
+    let parent_score: i32 = parent_score_classes.iter().map(|&c| {
         monoclass_parent_score(process, deref_type, c, monoclass_parent, monoclassdef_klass, monoclass_name)
     }).sum();
-    asr::print_message(&format!("Offsets monoclass_parent: 0x{:X?}, parent_score: {}", monoclass_parent, parent_score));
-    if parent_score < 3 * default_classes.len() as i32 {
-        asr::print_message(&format!("BAD BAD parent_score: some invalid classes, {} vs {}", parent_score, 3 * default_classes.len()));
-    } else if parent_score == 3 * default_classes.len() as i32 {
-        asr::print_message(&format!("BAD parent_score: they can't all be null, {} vs {}", parent_score, 3 * default_classes.len()));
+    asr::print_message(&format!("Offsets monoclass_parent: 0x{:X?}, parent_score: {} / {}", monoclass_parent, parent_score, 4 * parent_score_classes.len()));
+    if parent_score < 3 * parent_score_classes.len() as i32 {
+        asr::print_message(&format!("BAD BAD parent_score: some invalid classes, {} vs {}", parent_score, 3 * parent_score_classes.len()));
+    } else if parent_score == 3 * parent_score_classes.len() as i32 {
+        asr::print_message(&format!("BAD parent_score: they can't all be null, {} vs {}", parent_score, 3 * parent_score_classes.len()));
     }
 
     next_tick().await;
@@ -476,7 +502,7 @@ async fn option_main(process: &Process) -> Option<()> {
     let runtime_info_score: i32 = map_name_class_w_static.values().map(|&c| {
         monoclass_runtime_info_score(process, deref_type, c, monoclass_runtime_info, monoclassdef_klass, monoclassruntimeinfo_domain_vtables)
     }).sum();
-    asr::print_message(&format!("Offsets monoclass_runtime_info: 0x{:X?}, runtime_info_score: {}", monoclass_runtime_info, runtime_info_score));
+    asr::print_message(&format!("Offsets monoclass_runtime_info: 0x{:X?}, runtime_info_score: {} / {}", monoclass_runtime_info, runtime_info_score, 6 * map_name_class_w_static.len()));
     if runtime_info_score < 6 * map_name_class_w_static.len() as i32 {
         asr::print_message(&format!("BAD runtime_info_score: {} vs {}", runtime_info_score, 6 * map_name_class_w_static.len()));
     }
@@ -599,7 +625,7 @@ async fn static_table_offsets_v2_v3(
         monoclass_vtable_size,
         monovtable_vtable
     ).unwrap_or_default();
-    asr::print_message(&format!("{:?} Offsets monovtable_vtable: 0x{:X}, vtable_score: {}", version, monovtable_vtable, vtable_score));
+    asr::print_message(&format!("{:?} Offsets monovtable_vtable: 0x{:X}, vtable_score: {} / 4", version, monovtable_vtable, vtable_score));
     if vtable_score < 4 {
         asr::print_message("BAD: vtable_score is not at maximum");
     }
@@ -830,16 +856,20 @@ fn monoclass_fields_score(
 
 fn monoclass_parent_score(process: &Process, deref_type: DerefType, c: Address, monoclass_parent: i32, monoclassdef_klass: i32, monoclass_name: i32) -> i32 {
     let Ok(parent_addr) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_parent) else {
+        // asr::print_message(&format!("monoclass_parent_score reading monoclass_parent fails: {}", name));
         return 0;
     };
     // It's okay to be null, it's not okay to point to something not a valid class
     if parent_addr.is_null() {
+        // asr::print_message(&format!("monoclass_parent_score name null: {}", name));
         return 3;
     }
     let Ok(parent) = read_pointer(process, deref_type, parent_addr) else {
+        // asr::print_message(&format!("monoclass_parent_score parent_addr problem for: {}", name));
         return 1;
     };
     if class_name(process, deref_type, parent, monoclassdef_klass, monoclass_name).is_none() {
+        // asr::print_message(&format!("monoclass_parent_score parent name problem for parent of: {}", name));
         return 2;
     }
     4
