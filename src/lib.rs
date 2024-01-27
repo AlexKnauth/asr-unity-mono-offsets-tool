@@ -347,10 +347,12 @@ async fn option_main(process: &Process) -> Option<()> {
     let monoclassdef_klass = 0x0;
     asr::print_message(&format!("Offsets monoclassdef_klass: 0x{:X?}, ASSUMED", monoclassdef_klass));
     let (monoclass_name, monoclass_name_space) = [(0x2C, 0x30), (0x30, 0x34), (0x38, 0x40), (0x40, 0x48), (0x48, 0x50)].into_iter().max_by_key(|&(monoclass_name, monoclass_name_space)| {
-        monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space)
+        let class_name_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
+        asr::print_message(&format!("monoclass_name: 0x{:X?} space: 0x{:X?}, class_name_score: {} / 7", monoclass_name, monoclass_name_space, class_name_score));
+        class_name_score
     })?;
     let class_name_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
-    asr::print_message(&format!("Offsets monoclass_name: 0x{:X?}, class_name_score: {} / 7", monoclass_name, class_name_score));
+    asr::print_message(&format!("Offsets monoclass_name: 0x{:X?}, space: 0x{:X?}, class_name_score: {} / 7", monoclass_name, monoclass_name_space, class_name_score));
     if class_name_score < 7 {
         asr::print_message("BAD: class_name_score is not at maximum");
     }
