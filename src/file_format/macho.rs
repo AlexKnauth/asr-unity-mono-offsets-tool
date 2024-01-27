@@ -85,20 +85,17 @@ pub fn get_function_address(process: &Process, range: (Address, u64), macho_byte
     asr::print_message("macho get_function_address: before get_function_offset");
     let function_offset: u32 = get_function_offset(&macho_bytes2, function_name)?;
     asr::print_message(&format!("macho get_function_address: function_offset: 0x{:X?}", function_offset));
-    asr::print_message("macho get_function_address: before scan_macho_page");
-    let function_address = page + function_offset;
-    asr::print_message(&format!("macho get_function_address: function_address: {}", function_address));
-    let actual: [u8; 0x100] = process.read(function_address).ok()?;
-    let expected: [u8; 0x100] = slice_read(&macho_bytes2, function_offset as usize).ok()?;
-    asr::print_message("macho get_function_address: before actual vs expected");
-    if actual != expected {
-        asr::print_message("BAD: actual != expected");
-        let signature: Signature<0x100> = Signature::Simple(expected);
-        let function_address_2 = signature.scan_process_range(process, range)?;
-        asr::print_message(&format!("macho get_function_address: function_address_2: {}", function_address_2));
-        return Some(function_address_2);
+    let function_address_via_page = page + function_offset;
+    asr::print_message(&format!("macho get_function_address: function_address_via_page: {}", function_address_via_page));
+    let bytes_via_page: [u8; 0x100] = process.read(function_address_via_page).ok()?;
+    let bytes_expected: [u8; 0x100] = slice_read(&macho_bytes2, function_offset as usize).ok()?;
+    if bytes_via_page != bytes_expected {
+        asr::print_message("BAD: bytes_via_page != bytes_expected");
     }
-    Some(function_address)
+    let signature: Signature<0x100> = Signature::Simple(bytes_expected);
+    let function_address_expected = signature.scan_process_range(process, range)?;
+    asr::print_message(&format!("macho get_function_address: function_address_expected: {}", function_address_expected));
+    Some(function_address_expected)
 }
 
 /// Finds the offset of a function in the bytes of a MachO file.
