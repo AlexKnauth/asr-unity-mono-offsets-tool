@@ -4,7 +4,7 @@ mod binary_format;
 mod file;
 mod file_format;
 
-use std::iter;
+use std::{cmp::max, iter};
 
 use asr::{
     future::{next_tick, retry},
@@ -398,7 +398,7 @@ async fn option_main(process: &Process) -> Option<()> {
         let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n, _)| {
             monoclassdef_field_count_score(process, deref_type, c, n, monoclassdef_field_count, monoclassdef_next_class_cache)
         }).sum();
-        // asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
+        asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
         field_count_score
     })?;
     let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n, _)| {
@@ -438,7 +438,7 @@ async fn option_main(process: &Process) -> Option<()> {
             let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1);
             monoclass_fields_score(process, deref_type, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
         }).sum();
-        // asr::print_message(&format!("monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
+        asr::print_message(&format!("monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
         fields_score
     })?;
     let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1, _)| {
@@ -793,6 +793,8 @@ fn monoclassdef_next_class_cache_score(
     monoclass_name: i32,
     monoclass_name_space: i32,
 ) -> i32 {
+    let mut m = 0;
+    // let mut s = 0;
     for i in 0..class_cache_size {
         let table_addr_i = table_addr + (i as u64).wrapping_mul(deref_type.size_of_ptr());
         let Ok(table1) = read_pointer(process, deref_type, table_addr_i) else {
@@ -800,6 +802,7 @@ fn monoclassdef_next_class_cache_score(
         };
         let mut table = table1;
         let mut seen = BTreeSet::new();
+        let mut n_i = 0;
         while !table.is_null() {
             if seen.replace(table).is_some() { return 11; }
             let Ok(class) = read_pointer(process, deref_type, table) else {
@@ -811,9 +814,13 @@ fn monoclassdef_next_class_cache_score(
                 return 12;
             };
             table = table2;
+            n_i += 1;
         }
+        m = max(m, n_i);
+        // s += n_i;
     }
-    14
+    // asr::print_message(&format!("monoclassdef_next_class_cache_score: m = {}, s = {}", m, s));
+    14 + m
 }
 
 fn monoclassdef_field_count_score(
