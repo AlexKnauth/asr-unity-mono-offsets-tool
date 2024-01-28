@@ -498,7 +498,7 @@ async fn option_main(process: &Process) -> Option<()> {
         Some((k, *map_name_class.get(&k.to_string())?))
     }).collect();
 
-    let monoclass_runtime_info = [0x7C, 0x84, 0xA4, 0xC8, 0xD0, 0xF0, 0xF8].into_iter().max_by_key(|&monoclass_runtime_info| {
+    let monoclass_runtime_info = [0x7C, 0x84, 0xA4, 0xA8, 0xC8, 0xD0, 0xF0, 0xF8].into_iter().max_by_key(|&monoclass_runtime_info| {
         let runtime_info_score: i32 = map_name_class_w_static.values().map(|&c| {
             monoclass_runtime_info_score(process, deref_type, c, monoclass_runtime_info, monoclassdef_klass, monoclassruntimeinfo_domain_vtables)
         }).sum();
