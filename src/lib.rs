@@ -826,7 +826,7 @@ fn monoclassdef_next_class_cache_score(
                 return 1;
             };
             let class_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
-            if class_score < 10 { return 2 + class_score; }
+            if class_score < 9 { return 2 + class_score; }
             let Ok(table2) = read_pointer(process, deref_type, table + monoclassdef_next_class_cache) else {
                 return 13;
             };
