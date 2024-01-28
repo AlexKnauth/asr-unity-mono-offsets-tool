@@ -81,7 +81,7 @@ const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 6] = [
     ("UnSafeCharBuffer", (3, 4)),
 ];
 
-const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 10] = [
+const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 9] = [
     ("Boolean", &[
         ("TrueString", &[
             (&[("String", "m_stringLength")], &[0x04]),
@@ -121,9 +121,11 @@ const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 
         ("MaxValue", &[]),
         ("MinValue", &[]),
     ]),
+    /*
     ("TimeZone", &[
         ("currentTimeZone", &[]),
     ]),
+    */
     ("Type", &[
         ("FilterAttribute", &[]),
         ("FilterName", &[]),
@@ -945,7 +947,10 @@ fn v2_v3_monovtable_vtable_score(
 ) -> Option<i32> {
     let map_name_static_field_bytes: BTreeMap<&str, &[(&str, &[(&[(&str, &str)], &[u8])])]> = BTreeMap::from(NAME_STATIC_FIELD_BYTES);
     for (k, sfbs) in map_name_static_field_bytes {
-        let c = *map_name_class.get(k).unwrap();
+        let Some(&c) = map_name_class.get(k) else {
+            asr::print_message(&format!("map_name_class.get failed: {}", k));
+            return None;
+        };
         let Ok(runtime_info) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_runtime_info) else {
             return Some(0);
         };
