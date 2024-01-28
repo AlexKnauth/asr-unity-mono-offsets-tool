@@ -358,10 +358,26 @@ async fn option_main(process: &Process) -> Option<()> {
 
     next_tick().await;
 
-    // Hard to guess both monoclassdef_klass and monoclass_name at the same time.
+    // Hard to guess both monoclassdef_klass and other things at the same time.
     // But monoclassdef_klass seems to always be 0 anyway.
     let monoclassdef_klass = 0x0;
     asr::print_message(&format!("Offsets monoclassdef_klass: 0x{:X?}, ASSUMED", monoclassdef_klass));
+
+    let monoclass_image = [0x28, 0x2C, 0x30, 0x38, 0x40].into_iter().max_by_key(|&monoclass_image| {
+        let image_score: i32 = classes_no_next.iter().map(|&c| {
+            monoclass_image_score(process, deref_type, c, monoclassdef_klass, monoclass_image, default_image)
+        }).sum();
+        // asr::print_message(&format!("monoclass_image: 0x{:X?}, image_score: {}", monoclass_image, image_score));
+        image_score
+    })?;
+    let image_score: i32 = classes_no_next.iter().map(|&c| {
+        monoclass_image_score(process, deref_type, c, monoclassdef_klass, monoclass_image, default_image)
+    }).sum();
+    asr::print_message(&format!("Offsets monoclass_image: 0x{:X?}, image_score: {} / {}", monoclass_image, image_score, 3 * classes_no_next.len()));
+    if image_score < 3 * classes_no_next.len() as i32 {
+        asr::print_message("BAD: image_score is not at maximum");
+    }
+
     let (monoclass_name, monoclass_name_space) = [(0x2C, 0x30), (0x30, 0x34), (0x34, 0x38), (0x38, 0x40), (0x40, 0x48), (0x48, 0x50)].into_iter().max_by_key(|&(monoclass_name, monoclass_name_space)| {
         let class_name_score: i32 = classes_no_next.iter().map(|&c| {
             monoclass_name_score(process, deref_type, c, monoclassdef_klass, monoclass_name, monoclass_name_space)
@@ -758,6 +774,27 @@ fn monoimage_class_cache_score(
     if process.read::<u8>(class).is_err() { return 6; }
     if class != table { return 7; }
     8
+}
+
+fn monoclass_image_score(
+    process: &Process,
+    deref_type: DerefType,
+    class: Address,
+    monoclassdef_klass: i32,
+    monoclass_image: i32,
+    image: Address,
+) -> i32 {
+    let Ok(c_image) = read_pointer(process, deref_type, class + monoclassdef_klass + monoclass_image) else {
+        return 0;
+    };
+    if !process.read::<u8>(c_image).is_ok() {
+        return 1;
+    }
+    if c_image != image {
+        // asr::print_message(&format!("c_image {} != image {}", c_image, image));
+        return 2;
+    }
+    3
 }
 
 fn monoclass_name_score(
