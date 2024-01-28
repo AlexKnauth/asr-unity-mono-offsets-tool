@@ -11,7 +11,7 @@ checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
 [[package]]
 name = "asr"
 version = "0.1.0"
-source = "git+https://github.com/AlexKnauth/asr?branch=unity_il2cpp-mono-3#dc6ded9cbf62c9f950dbe5edfe7ce4f04c8555e0"
+source = "git+https://github.com/AlexKnauth/asr?branch=unity_il2cpp-mono-3#f8bf7ea31f5eedd1dad010032058455f381d04be"
 dependencies = [
  "arrayvec",
  "asr-derive",
@@ -24,7 +24,7 @@ dependencies = [
 [[package]]
 name = "asr-derive"
 version = "0.1.0"
-source = "git+https://github.com/AlexKnauth/asr?branch=unity_il2cpp-mono-3#dc6ded9cbf62c9f950dbe5edfe7ce4f04c8555e0"
+source = "git+https://github.com/AlexKnauth/asr?branch=unity_il2cpp-mono-3#f8bf7ea31f5eedd1dad010032058455f381d04be"
 dependencies = [
  "heck",
  "proc-macro2",
