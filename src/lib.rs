@@ -346,10 +346,6 @@ async fn option_main(process: &Process) -> Option<()> {
     // asr::print_message(&format!("class_cache_size: {}", class_cache_size));
     let table_addr = read_pointer(process, deref_type, default_image + monoimage_class_cache + monointernalhashtable_table).ok()?;
     // asr::print_message(&format!("table_addr: {}", table_addr));
-    let table = read_pointer(process, deref_type, table_addr).ok()?;
-    // asr::print_message(&format!("table: {}", table));
-    let class = read_pointer(process, deref_type, table).ok()?;
-    // asr::print_message(&format!("class: {}", class));
 
     next_tick().await;
 
@@ -358,18 +354,26 @@ async fn option_main(process: &Process) -> Option<()> {
     //  * Then go back and find monoclassdef_next_class_cache,
     //    using the class-related offsets to score that.
 
+    let classes_no_next: BTreeSet<Address> = classes_no_next_iter(process, deref_type, table_addr, class_cache_size).collect();
+
+    next_tick().await;
+
     // Hard to guess both monoclassdef_klass and monoclass_name at the same time.
     // But monoclassdef_klass seems to always be 0 anyway.
     let monoclassdef_klass = 0x0;
     asr::print_message(&format!("Offsets monoclassdef_klass: 0x{:X?}, ASSUMED", monoclassdef_klass));
     let (monoclass_name, monoclass_name_space) = [(0x2C, 0x30), (0x30, 0x34), (0x34, 0x38), (0x38, 0x40), (0x40, 0x48), (0x48, 0x50)].into_iter().max_by_key(|&(monoclass_name, monoclass_name_space)| {
-        let class_name_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
-        // asr::print_message(&format!("monoclass_name: 0x{:X?} space: 0x{:X?}, class_name_score: {} / 10", monoclass_name, monoclass_name_space, class_name_score));
+        let class_name_score: i32 = classes_no_next.iter().map(|&c| {
+            monoclass_name_score(process, deref_type, c, monoclassdef_klass, monoclass_name, monoclass_name_space)
+        }).sum();
+        // asr::print_message(&format!("monoclass_name: 0x{:X?} space: 0x{:X?}, class_name_score: {}", monoclass_name, monoclass_name_space, class_name_score));
         class_name_score
     })?;
-    let class_name_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
-    asr::print_message(&format!("Offsets monoclass_name: 0x{:X?}, space: 0x{:X?}, class_name_score: {} / 10", monoclass_name, monoclass_name_space, class_name_score));
-    if class_name_score < 10 {
+    let class_name_score: i32 = classes_no_next.iter().map(|&c| {
+        monoclass_name_score(process, deref_type, c, monoclassdef_klass, monoclass_name, monoclass_name_space)
+    }).sum();
+    asr::print_message(&format!("Offsets monoclass_name: 0x{:X?}, space: 0x{:X?}, class_name_score: {} / {}", monoclass_name, monoclass_name_space, class_name_score, 10 * classes_no_next.len()));
+    if class_name_score < 10 * classes_no_next.len() as i32 {
         asr::print_message("BAD: class_name_score is not at maximum");
     }
     
@@ -777,17 +781,20 @@ fn monoclass_name_score(
         return 3;
     };
     let Ok(name_str) = std::str::from_utf8(&name_cstr) else {
-        asr::print_message(&format!("class name_cstr not utf8: {:X?}", name_cstr.as_bytes()));
+        // asr::print_message(&format!("class name_cstr not utf8: {:X?}", name_cstr.as_bytes()));
         return 4;
     };
     let Ok(space_str) = std::str::from_utf8(&space_cstr) else {
-        asr::print_message(&format!("class space_cstr not utf8: {:X?}", space_cstr.as_bytes()));
+        // asr::print_message(&format!("class space_cstr not utf8: {:X?}", space_cstr.as_bytes()));
         return 5;
     };
     if !name_str.chars().all(|c| c.is_ascii_graphic()) { return 6; }
     if !space_str.chars().all(|c| c.is_ascii_graphic()) { return 7; }
     if name_str.is_empty() { return 8; }
-    if space_str.is_empty() { return 9; }
+    if space_str.is_empty() {
+        // asr::print_message(&format!("space empty for {}", name_str));
+        // return 9;
+    }
     // asr::print_message(&format!("class name_str: {}, space_str: {}", name_str, space_str));
     // it's okay for the space to be an empty string,
     // but it's not okay for it to not be valid utf8
@@ -1045,6 +1052,28 @@ fn assemblies_iter<'a>(process: &'a Process, deref_type: DerefType, assemblies: 
             assembly = next_assembly;
             Some(data)
         }
+    })
+}
+
+fn classes_no_next_iter<'a>(
+    process: &'a Process,
+    deref_type: DerefType,
+    table_addr: Address,
+    class_cache_size: i32,
+) -> impl Iterator<Item = Address> + 'a {
+    (0..class_cache_size).flat_map(move |i| {
+        let table_addr_i = table_addr + (i as u64).wrapping_mul(deref_type.size_of_ptr());
+        let mut table = read_pointer(process, deref_type, table_addr_i).unwrap_or_default();
+        let mut seen = BTreeSet::new();
+        iter::from_fn(move || -> Option<Address> {
+            if table.is_null() || seen.replace(table).is_some() {
+                None
+            } else {
+                let class = read_pointer(process, deref_type, table).ok()?;
+                table = Address::NULL;
+                Some(class)
+            }
+        })
     })
 }
 
