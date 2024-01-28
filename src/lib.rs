@@ -257,7 +257,7 @@ async fn option_main(process: &Process) -> Option<()> {
                 sig.scan_process_range(process, (mono_assembly_foreach_address, 0x100))
             })? + 2;
 
-            process.read::<Address32>(ptr + 2).ok()?.into()
+            process.read::<Address32>(ptr).ok()?.into()
         },
         (DerefType::Bit32, BinaryFormat::ELF) => { return None; },
         (DerefType::Bit32, BinaryFormat::MachO) => {
