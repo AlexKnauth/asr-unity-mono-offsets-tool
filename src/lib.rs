@@ -49,7 +49,7 @@ const UNITY_PLAYER_NAMES: [&str; 3] = [
     "UnityPlayer.dylib",
 ];
 
-static EXCLUDE_PARENT_SCORE: [&str; 19] = [
+static EXCLUDE_PARENT_SCORE: [&str; 21] = [
     "IDisengageHandler",
     "InputControlSource",
     "ISpriteCollectionForceBuild",
@@ -69,6 +69,8 @@ static EXCLUDE_PARENT_SCORE: [&str; 19] = [
     "ITextElement",
     "IMenuOptionListSetting",
     "<Module>",
+    "IKeyboardProvider",
+    "IMouseProvider",
 ];
 
 // expect class_int32 to have 3 fields
@@ -871,21 +873,22 @@ fn monoclass_fields_score(
 }
 
 fn monoclass_parent_score(process: &Process, deref_type: DerefType, c: Address, monoclass_parent: i32, monoclassdef_klass: i32, monoclass_name: i32) -> i32 {
+    // let name = class_name(process, deref_type, c, monoclassdef_klass, monoclass_name);
     let Ok(parent_addr) = read_pointer(process, deref_type, c + monoclassdef_klass + monoclass_parent) else {
-        // asr::print_message(&format!("monoclass_parent_score reading monoclass_parent fails: {}", name));
+        // asr::print_message(&format!("monoclass_parent_score reading monoclass_parent fails: {:?}", name));
         return 0;
     };
     // It's okay to be null, it's not okay to point to something not a valid class
     if parent_addr.is_null() {
-        // asr::print_message(&format!("monoclass_parent_score name null: {}", name));
+        // asr::print_message(&format!("monoclass_parent_score name null: {:?}", name));
         return 3;
     }
     let Ok(parent) = read_pointer(process, deref_type, parent_addr) else {
-        // asr::print_message(&format!("monoclass_parent_score parent_addr problem for: {}", name));
+        // asr::print_message(&format!("monoclass_parent_score parent_addr problem for: {:?}", name));
         return 1;
     };
     if class_name(process, deref_type, parent, monoclassdef_klass, monoclass_name).is_none() {
-        // asr::print_message(&format!("monoclass_parent_score parent name problem for parent of: {}", name));
+        // asr::print_message(&format!("monoclass_parent_score parent name problem for parent of: {:?}", name));
         return 2;
     }
     4
