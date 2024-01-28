@@ -352,12 +352,12 @@ async fn option_main(process: &Process) -> Option<()> {
     asr::print_message(&format!("Offsets monoclassdef_klass: 0x{:X?}, ASSUMED", monoclassdef_klass));
     let (monoclass_name, monoclass_name_space) = [(0x2C, 0x30), (0x30, 0x34), (0x34, 0x38), (0x38, 0x40), (0x40, 0x48), (0x48, 0x50)].into_iter().max_by_key(|&(monoclass_name, monoclass_name_space)| {
         let class_name_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
-        // asr::print_message(&format!("monoclass_name: 0x{:X?} space: 0x{:X?}, class_name_score: {} / 9", monoclass_name, monoclass_name_space, class_name_score));
+        // asr::print_message(&format!("monoclass_name: 0x{:X?} space: 0x{:X?}, class_name_score: {} / 10", monoclass_name, monoclass_name_space, class_name_score));
         class_name_score
     })?;
     let class_name_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
-    asr::print_message(&format!("Offsets monoclass_name: 0x{:X?}, space: 0x{:X?}, class_name_score: {} / 9", monoclass_name, monoclass_name_space, class_name_score));
-    if class_name_score < 9 {
+    asr::print_message(&format!("Offsets monoclass_name: 0x{:X?}, space: 0x{:X?}, class_name_score: {} / 10", monoclass_name, monoclass_name_space, class_name_score));
+    if class_name_score < 10 {
         asr::print_message("BAD: class_name_score is not at maximum");
     }
     
@@ -370,8 +370,8 @@ async fn option_main(process: &Process) -> Option<()> {
         next_class_cache_score
     })?;
     let next_class_cache_score = monoclassdef_next_class_cache_score(process, deref_type, table_addr, class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name, monoclass_name_space);
-    asr::print_message(&format!("Offsets monoclassdef_next_class_cache: 0x{:X?}, next_class_cache_score: {} / 14", monoclassdef_next_class_cache, next_class_cache_score));
-    if next_class_cache_score < 14 {
+    asr::print_message(&format!("Offsets monoclassdef_next_class_cache: 0x{:X?}, next_class_cache_score: {} / 15", monoclassdef_next_class_cache, next_class_cache_score));
+    if next_class_cache_score < 15 {
         asr::print_message("BAD: next_class_cache_score is not at maximum");
     }
 
@@ -775,10 +775,11 @@ fn monoclass_name_score(
     if !name_str.chars().all(|c| c.is_ascii_graphic()) { return 6; }
     if !space_str.chars().all(|c| c.is_ascii_graphic()) { return 7; }
     if name_str.is_empty() { return 8; }
+    if space_str.is_empty() { return 9; }
     // asr::print_message(&format!("class name_str: {}, space_str: {}", name_str, space_str));
     // it's okay for the space to be an empty string,
     // but it's not okay for it to not be valid utf8
-    9
+    10
 }
 
 fn class_name(process: &Process, deref_type: DerefType, class: Address, monoclassdef_klass: i32, monoclass_name: i32) -> Option<String> {
@@ -813,9 +814,9 @@ fn monoclassdef_next_class_cache_score(
                 return 1;
             };
             let class_score = monoclass_name_score(process, deref_type, class, monoclassdef_klass, monoclass_name, monoclass_name_space);
-            if class_score < 9 { return 2 + class_score; }
+            if class_score < 10 { return 2 + class_score; }
             let Ok(table2) = read_pointer(process, deref_type, table + monoclassdef_next_class_cache) else {
-                return 12;
+                return 13;
             };
             table = table2;
             n_i += 1;
@@ -824,7 +825,7 @@ fn monoclassdef_next_class_cache_score(
         // s += n_i;
     }
     // asr::print_message(&format!("monoclassdef_next_class_cache_score: m = {}, s = {}", m, s));
-    14 + m
+    15 + m
 }
 
 fn monoclassdef_field_count_score(
