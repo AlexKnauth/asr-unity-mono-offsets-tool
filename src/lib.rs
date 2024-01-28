@@ -398,7 +398,7 @@ async fn option_main(process: &Process) -> Option<()> {
 
     next_tick().await;
 
-    let monoclassdef_field_count = [0x64, 0x8C, 0x94, 0x9C, 0xA4, 0xF0, 0xF8, 0x100].into_iter().max_by_key(|&monoclassdef_field_count| {
+    let monoclassdef_field_count = [0x64, 0x68, 0x8C, 0x94, 0x9C, 0xA4, 0xF0, 0xF8, 0x100].into_iter().max_by_key(|&monoclassdef_field_count| {
         let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n, _)| {
             monoclassdef_field_count_score(process, deref_type, c, n, monoclassdef_field_count, monoclassdef_next_class_cache)
         }).sum();
