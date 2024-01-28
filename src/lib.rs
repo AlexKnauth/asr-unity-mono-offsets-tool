@@ -49,7 +49,8 @@ const UNITY_PLAYER_NAMES: [&str; 3] = [
     "UnityPlayer.dylib",
 ];
 
-static EXCLUDE_PARENT_SCORE: [&str; 21] = [
+static EXCLUDE_PARENT_SCORE: [&str; 33] = [
+    "Object",
     "IDisengageHandler",
     "InputControlSource",
     "ISpriteCollectionForceBuild",
@@ -71,6 +72,17 @@ static EXCLUDE_PARENT_SCORE: [&str; 21] = [
     "<Module>",
     "IKeyboardProvider",
     "IMouseProvider",
+    "ISerializable",
+    "IEnumerable",
+    "IList",
+    "IPointerClickHandler",
+    "ICancelHandler",
+    "ILayoutElement",
+    "IEventSystemHandler",
+    "IPointerExitHandler",
+    "IDeselectHandler",
+    "IFsmStateAction",
+    "IDamageTaker",
 ];
 
 // expect class_int32 to have 3 fields
@@ -461,8 +473,8 @@ async fn option_main(process: &Process) -> Option<()> {
     next_tick().await;
 
     let parent_score_classes: BTreeSet<Address> = default_classes.iter().filter(|&&c| {
-        let n = class_name(process, deref_type, c, monoclassdef_klass, monoclass_name).unwrap_or("<unknown>".to_string());
-        !EXCLUDE_PARENT_SCORE.contains(&n.as_str())
+        let n = class_name(process, deref_type, c, monoclassdef_klass, monoclass_name).unwrap_or_default();
+        !n.is_empty() && !EXCLUDE_PARENT_SCORE.contains(&n.as_str())
     }).cloned().collect();
     let monoclass_parent = [0x20, 0x24, 0x28, 0x30].into_iter().max_by_key(|&monoclass_parent| {
         let parent_score: i32 = parent_score_classes.iter().map(|&c| {
