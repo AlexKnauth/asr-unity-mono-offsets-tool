@@ -1,6 +1,6 @@
 use core::mem;
 
-use asr::{file_format::elf::Info, Address, Process};
+use asr::{file_format::elf::Info, signature::Signature, Address, Process};
 pub use asr::file_format::elf;
 use bytemuck::{Pod, Zeroable};
 
@@ -159,42 +159,21 @@ pub fn get_function_symbol_address(process: &Process, range: (Address, u64), elf
 
 /// Finds the address of a function from an ELF module range and file contents.
 pub fn get_function_address(process: &Process, range: (Address, u64), elf_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
-    let function_offset: u32 = get_function_offset(&elf_bytes, function_name)?;
     let page = scan_elf_page(process, range)?;
-    let function_address = page + function_offset;
-    let actual: [u8; 0x100] = process.read(function_address).ok()?;
-    let expected: [u8; 0x100] = slice_read(&elf_bytes, function_offset as usize).ok()?;
-    if actual != expected { return None; }
-    let mut buffer: Vec<u8> = Vec::new();
-    buffer.resize_with(elf_bytes.len(), Default::default);
-    process.read_into_buf(page, &mut buffer).unwrap_or_default();
-    if elf_bytes == buffer {
-        asr::print_message("GOOD: elf_bytes == buffer");
-    } else {
-        asr::print_message("BAD: elf_bytes != buffer");
-        // let mut common_zero = 0;
-        let mut same = 0;
-        let mut diff = 0;
-        for i in 0..elf_bytes.len() {
-            if elf_bytes[i] == 0 && buffer[i] == 0  {
-                // common_zero += 1;
-            } else if elf_bytes[i] == buffer[i] {
-                same += 1;
-            } else {
-                diff += 1;
-            }
-        }
-        asr::print_message(&format!("same: {}%, diff: {}%", 
-                                    (same as f64 * 100.0) / elf_bytes.len() as f64,
-                                    (diff as f64 * 100.0) / elf_bytes.len() as f64));
-        let other_function_offset = get_function_offset(&buffer, function_name).expect("BAD BAD BAD: other_function_offset");
-        if function_offset == other_function_offset {
-            asr::print_message("LUCKY: function_offset == other_function_offset");
-        } else {
-            asr::print_message("BAD BAD: function_offset != other_function_offset");
-        }
+    let header: [u8; HEADER_SIZE] = process.read(page).ok()?;
+    let header_offset = memchr::memmem::find(elf_bytes, &header)?;
+    let elf_bytes2 = &elf_bytes[header_offset..];
+    let function_offset: u32 = get_function_offset(&elf_bytes2, function_name)?;
+    // NOTE: function_address_via_page is probably NOT the right address
+    let function_address_via_page = page + function_offset;
+    let bytes_via_page: [u8; 0x100] = process.read(function_address_via_page).ok()?;
+    let bytes_expected: [u8; 0x100] = slice_read(&elf_bytes2, function_offset as usize).ok()?;
+    if bytes_via_page != bytes_expected {
+        asr::print_message("BAD: bytes_via_page != bytes_expected");
     }
-    Some(function_address)
+    let signature: Signature<0x100> = Signature::Simple(bytes_expected);
+    let function_address_expected = signature.scan_process_range(process, range)?;
+    Some(function_address_expected)
 }
 
 /// Finds the offset of a function in the bytes of a ELF file.

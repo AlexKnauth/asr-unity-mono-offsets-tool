@@ -1,0 +1,38 @@
+Auto splitter reloaded.
+Hello, World!
+Attached to a new process: hollow_knight.x86_64
+binary format: ELF
+mono_name: libmono.so
+mono_path: /mnt/home/alex/games/hollowknight/versions/1432/Hollow Knight/hollow_knight_Data/Mono/x86_64/libmono.so
+deref_type: Bit64
+version: V1
+i: 0, sh_type: 0
+i: 1, sh_type: 7
+i: 2, sh_type: 1879048182
+i: 3, sh_type: 11
+found symbol table at i: 3
+elf::get_function_symbol_address: all good, both Some and equal
+mono_assembly_foreach_address: 7fbf4c2e28cf
+assemblies_pointer: 7fbf4c6b4c68
+assemblies: 49b3850
+Offsets monoassembly_aname: 0x10, aname_score: 5 / 5
+name_str: System.Xml
+Offsets monoassembly_image: 0x58, image_score: 5 / 5
+Offsets monointernalhashtable_size: 0x18, from Bit64
+Offsets monointernalhashtable_table: 0x20, from Bit64
+Offsets monoimage_class_cache: 0x3D0, class_cache_score: 8 / 8
+Offsets monoclassdef_klass: 0x0, ASSUMED
+Offsets monoclass_image: 0x40, image_score: 5146 / 5148
+BAD: image_score is not at maximum
+Offsets monoclass_name: 0x48, space: 0x50, class_name_score: 17160 / 17160
+Offsets monoclassdef_next_class_cache: 0x100, next_class_cache_score: 17 / 15
+Offsets monoclassdef_field_count: 0x94, field_count_score: 20 / 20
+Offsets monoclassfieldalignment: 0x20, from Bit64
+Offsets monoclassfield_name: 0x8, from Bit64
+Offsets monoclassfield_offset: 0x18, from Bit64
+Offsets monoclass_fields: 0xA8, fields_score: 25 / 25
+Offsets monoclass_parent: 0x28, parent_score: 10000 / 10000
+Offsets monoclassruntimeinfo_domain_vtables: 0x8, from Bit64
+Offsets monoclass_runtime_info: 0xF8, runtime_info_score: 54 / 54
+UNUSED / UNCONSTRAINED monovtable_vtable
+V1 Offsets monoclass_vtable_size (MonoVtable.data): 0x18, from Bit64
