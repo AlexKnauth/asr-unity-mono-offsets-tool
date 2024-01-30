@@ -1,0 +1,39 @@
+This auto splitter uses WASI. The API is subject to change, because WASI is still in preview. Auto splitters using WASI may need to be recompiled in the future.
+Auto splitter loaded.
+Hello, World!
+Attached to a new process: hollow_knight.x86_64
+binary format: ELF
+mono_name: libmonobdwgc-2.0.so
+mono_path: /mnt/home/alex/.local/share/Steam/steamapps/common/Hollow Knight/hollow_knight_Data/MonoBleedingEdge/x86_64/libmonobdwgc-2.0.so
+deref_type: Bit64
+version: V2
+i: 0, sh_type: 0
+i: 1, sh_type: 7
+i: 2, sh_type: 1879048182
+i: 3, sh_type: 11
+found symbol table at i: 3
+elf::get_function_symbol_address: all good, both Some and equal
+mono_assembly_foreach_address: 7f6f875725f9
+assemblies_pointer: 7f6f879655b0
+assemblies: 10cade0
+Offsets monoassembly_aname: 0x10, aname_score: 5 / 5
+name_str: System.Xml
+Offsets monoassembly_image: 0x60, image_score: 5 / 5
+Offsets monointernalhashtable_size: 0x18, from Bit64
+Offsets monointernalhashtable_table: 0x20, from Bit64
+Offsets monoimage_class_cache: 0x4C0, class_cache_score: 8 / 8
+Offsets monoclassdef_klass: 0x0, ASSUMED
+Offsets monoclass_image: 0x38, image_score: 5101 / 5103
+BAD: image_score is not at maximum
+Offsets monoclass_name: 0x40, space: 0x48, class_name_score: 17010 / 17010
+Offsets monoclassdef_next_class_cache: 0x100, next_class_cache_score: 17 / 15
+Offsets monoclassdef_field_count: 0xF8, field_count_score: 24 / 24
+Offsets monoclassfieldalignment: 0x20, from Bit64
+Offsets monoclassfield_name: 0x8, from Bit64
+Offsets monoclassfield_offset: 0x18, from Bit64
+Offsets monoclass_fields: 0x90, fields_score: 30 / 30
+Offsets monoclass_parent: 0x28, parent_score: 10172 / 10172
+Offsets monoclassruntimeinfo_domain_vtables: 0x8, from Bit64
+Offsets monoclass_runtime_info: 0xC8, runtime_info_score: 54 / 54
+V2 Offsets monoclass_vtable_size (TypeDefinitionVTableSize): 0x54
+V2 Offsets monovtable_vtable: 0x40, vtable_score: 4 / 4
