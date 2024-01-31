@@ -163,12 +163,14 @@ async fn main() {
     asr::print_message("Hello, World!");
 
     loop {
-        let process = retry(|| {
-            PROCESS_NAMES.into_iter().find_map(Process::attach)
+        let (process, name) = retry(|| {
+            PROCESS_NAMES.into_iter().find_map(|n| {
+                Some((Process::attach(n)?, n))
+            })
         }).await;
         process
             .until_closes(async {
-                match option_main(&process).await {
+                match option_main(&process, name).await {
                     None => {
                         asr::print_message("option_main exit None");
                     },
@@ -184,8 +186,8 @@ async fn main() {
     }
 }
 
-async fn option_main(process: &Process) -> Option<()> {
-    let format = process_detect_binary_format(&process)?;
+async fn option_main(process: &Process, name: &str) -> Option<()> {
+    let format = process_detect_binary_format(&process, name)?;
     asr::print_message(&format!("binary format: {:?}", format));
 
     let Some((mono_name, mono_path, mono_range)) = MONO_NAMES.into_iter().find_map(|mono_name| {
@@ -198,7 +200,7 @@ async fn option_main(process: &Process) -> Option<()> {
     };
     asr::print_message(&format!("mono_name: {}", mono_name));
     asr::print_message(&format!("mono_path: {}", mono_path));
-    assert_eq!(path_detect_binary_format(&mono_path), Some(format));
+    assert_eq!(scan_page_detect_binary_format(process, mono_range), Some(format));
 
     let deref_type = match format {
         BinaryFormat::PE => file_format::pe::detect_deref_type(process, mono_range)?,

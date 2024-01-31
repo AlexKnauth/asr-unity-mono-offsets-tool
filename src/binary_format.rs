@@ -1,8 +1,5 @@
-use std::path::Path;
 
-use asr::Process;
-
-use crate::file::file_read_all_bytes;
+use asr::{Address, Process};
 
 // --------------------------------------------------------
 
@@ -34,14 +31,46 @@ impl DerefType {
 
 // --------------------------------------------------------
 
-pub fn process_detect_binary_format(process: &Process) -> Option<BinaryFormat> {
-    let path = process.get_path().ok()?;
-    path_detect_binary_format(path)
+const PAGE_SIZE: u64 = 0x1000;
+
+pub fn process_detect_binary_format(process: &Process, name: &str) -> Option<BinaryFormat> {
+    let address = process.get_module_address(name).ok()?;
+    address_detect_binary_format(process, address)
 }
 
-pub fn path_detect_binary_format<P: AsRef<Path>>(path: P) -> Option<BinaryFormat> {
-    let bytes = file_read_all_bytes(path).ok()?;
-    bytes_detect_binary_format(&bytes)
+pub fn scan_page_detect_binary_format(process: &Process, range: (Address, u64)) -> Option<BinaryFormat> {
+    let address = scan_page(process, range)?;
+    if address != range.0 {
+        asr::print_message(&format!("scan_page_detect_binary_format: offset = 0x{:X?}", address.value() - range.0.value()));
+    }
+    address_detect_binary_format(process, address)
+}
+
+/// Scans the range for a page that begins with Magic of any of the supported binary formats
+fn scan_page(process: &Process, range: (Address, u64)) -> Option<Address> {
+    let (addr, len) = range;
+    // negation mod PAGE_SIZE
+    let distance_to_page = (PAGE_SIZE - (addr.value() % PAGE_SIZE)) % PAGE_SIZE;
+    // round up to the next multiple of PAGE_SIZE
+    let first_page = addr + distance_to_page;
+    for i in 0..((len - distance_to_page) / PAGE_SIZE) {
+        let a = first_page + (i * PAGE_SIZE);
+        if let Ok(magic) = process.read::<[u8; 4]>(a) {
+            if bytes_detect_binary_format(&magic).is_some() {
+                return Some(a);
+            }
+        }
+    }
+    None
+}
+
+pub fn address_detect_binary_format(process: &Process, address: Address) -> Option<BinaryFormat> {
+    let magic: [u8; 4] = process.read(address).ok()?;
+    let r = bytes_detect_binary_format(&magic);
+    if r.is_none() {
+        asr::print_message(&format!("unrecogized: {:X?}", magic));
+    }
+    r
 }
 
 fn bytes_detect_binary_format(bytes: &[u8]) -> Option<BinaryFormat> {
