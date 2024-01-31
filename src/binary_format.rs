@@ -10,25 +10,6 @@ pub enum BinaryFormat {
     MachO,
 }
 
-/// Describes the pointer size that should be used while deferecencing a pointer path
-#[derive(Copy, Clone, Default, Debug)]
-pub enum DerefType {
-    /// 4-byte pointer size, used in 32bit processes
-    Bit32,
-    /// 8-byte pointer size, used in 64bit processes
-    #[default]
-    Bit64,
-}
-
-impl DerefType {
-    pub fn size_of_ptr(&self) -> u64 {
-        match self {
-            DerefType::Bit64 => 8,
-            DerefType::Bit32 => 4,
-        }
-    }
-}
-
 // --------------------------------------------------------
 
 const PAGE_SIZE: u64 = 0x1000;
