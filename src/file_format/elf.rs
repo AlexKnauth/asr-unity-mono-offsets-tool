@@ -107,6 +107,9 @@ pub fn scan_elf_page(process: &Process, range: (Address, u64)) -> Option<Address
 }
 
 pub fn detect_pointer_size(process: &Process, module_range: (Address, u64)) -> Option<PointerSize> {
+    // TODO: see if all this can be avoided / replaced with just asr::file_format::elf
+    // functions such as asr::file_format::elf::is_64_bit ?
+    // in particular, can the scan_elf_page be removed?
     let header_address = scan_elf_page(process, module_range)?;
     let header_bytes: [u8; HEADER_SIZE] = process.read(header_address).ok()?;
     let info = Info::parse(&header_bytes)?;
