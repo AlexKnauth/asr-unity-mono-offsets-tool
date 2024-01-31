@@ -35,6 +35,7 @@ const PAGE_SIZE: u64 = 0x1000;
 
 pub fn process_detect_binary_format(process: &Process, name: &str) -> Option<BinaryFormat> {
     let address = process.get_module_address(name).ok()?;
+    asr::print_message(&format!("process_detect_binary_format: address = {}", address));
     address_detect_binary_format(process, address)
 }
 
