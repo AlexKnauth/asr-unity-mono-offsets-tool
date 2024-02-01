@@ -7,6 +7,7 @@ use core::{
     iter::FusedIterator,
     mem,
 };
+use std::collections::BTreeMap;
 
 const CSTR: usize = 128;
 
@@ -25,6 +26,9 @@ const LC_SYMTAB: u32 = 0x2;
 /// dynamic link-edit symbol table info
 /// see also dysymtab_command
 const LC_DYSYMTAB: u32 = 0xb;
+/// 64-bit segment of this file to be mapped
+/// see also segment_command_64
+const LC_SEGMENT_64: u32 = 0x19;
 
 const HEADER_SIZE: usize = 32;
 
@@ -37,6 +41,8 @@ struct MachOFormatOffsets {
     string_table_offset: usize,
     nlist_value: usize,
     size_of_nlist_item: usize,
+    segmentcommand64_vmaddr: u32,
+    segmentcommand64_fileoff: u32,
 }
 
 impl MachOFormatOffsets {
@@ -53,6 +59,8 @@ impl MachOFormatOffsets {
             string_table_offset: 0x10,
             nlist_value: 0x08,
             size_of_nlist_item: 0x10,
+            segmentcommand64_vmaddr: 0x18,
+            segmentcommand64_fileoff: 0x28,
         }
     }
 }
@@ -228,6 +236,11 @@ pub fn symbols(
     let number_of_commands: u32 = process.read(page + (macho_offsets.number_of_commands as u64)).ok()?;
     print_message(&format!("macho::symbols: number_of_commands = {}", number_of_commands));
 
+    let mut symbol_table_fileoff: u32 = 0;
+    let mut number_of_symbols: u32 = 0;
+    let mut string_table_fileoff: u32 = 0;
+    let mut fileoff_to_vmaddr: BTreeMap<u64, u64> = BTreeMap::new();
+
     let mut offset_to_next_command: u32 = macho_offsets.load_commands as u32;
     for i in 0..number_of_commands {
         // Check if load command is LC_SYMTAB or LC_DYSYMTAB
@@ -235,38 +248,46 @@ pub fn symbols(
         // print_message(&format!("macho::symbols: next_command = {}", next_command));
         if next_command == LC_SYMTAB {
             print_message(&format!("macho::symbols: found LC_SYMTAB at i = {}", i));
-            let symbol_table_offset: u32 = process.read(page + offset_to_next_command + macho_offsets.symbol_table_offset as u32).ok()?;
-            let number_of_symbols: u32 = process.read(page + offset_to_next_command + macho_offsets.number_of_symbols as u32).ok()?;
-            let string_table_offset: u32 = process.read(page + offset_to_next_command + macho_offsets.string_table_offset as u32).ok()?;
-            print_message(&format!("macho::symbols: symbol_table_offset = {}, number_of_symbols = {}, string_table_offset = {}", symbol_table_offset, number_of_symbols, string_table_offset));
-
-            let symbol_table_contents: [u8; CSTR] = process.read(page + symbol_table_offset).ok()?;
-            print_message(&format!("macho::symbols: symbol table ~= {:X?}", &symbol_table_contents));
-
-            let string_table_contents: [u8; CSTR] = process.read(page + string_table_offset).ok()?;
-            print_message(&format!("macho::symbols: string table ~= {:X?}", &string_table_contents));
-
-            print_message(&format!("macho::symbols: predicted symbol table address via page = {:?}", page + symbol_table_offset));
-
-            let signature_symtab: Signature<CSTR> = Signature::new("A3 DE 00 00 3C 00 00 00 42 45 61 05 00 00 00 00 04 00 00 00 0F 01 00 00 F2 CE 23 00 00 00 00 00 31 00 00 00 0F 01 00 00 D6 CD 23 00 00 00 00 00 56 00 00 00 0F 0E 00 00 90 19 30 00 00 00 00 00 60 00 00 00 0F 01 00 00 A5 D0 23 00 00 00 00 00 6A 00 00 00 0F 0C 00 00 50 9A 2F 00 00 00 00 00 76 00 00 00 0F 01 00 00 37 D0 23 00 00 00 00 00 8F 00 00 00 0F 01 00 00 0B 8A 23 00 00 00 00 00");
-            let symbol_table_scan_address = signature_symtab.scan_process_range(process, range);
-            print_message(&format!("macho::symbols: symbol_table_scan_address = {:?}", symbol_table_scan_address));
-
-            print_message(&format!("macho::symbols: predicted string table address via page = {:?}", page + string_table_offset));
-
-            let signature_strtab: Signature<CSTR> = Signature::new("00 00 00 00 5F 41 4F 5F 63 6F 6D 70 61 72 65 5F 64 6F 75 62 6C 65 5F 61 6E 64 5F 73 77 61 70 5F 64 6F 75 62 6C 65 5F 65 6D 75 6C 61 74 69 6F 6E 00 5F 41 4F 5F 66 65 74 63 68 5F 63 6F 6D 70 61 72 65 5F 61 6E 64 5F 73 77 61 70 5F 65 6D 75 6C 61 74 69 6F 6E 00 5F 41 4F 5F 6C 6F 63 6B 73 00 5F 41 4F 5F 70 61 75 73 65 00 5F 41 4F 5F 70 74 5F 6C 6F 63 6B 00 5F 41 4F 5F 73 74 6F 72 65 5F");
-            let string_table_scan_address = signature_strtab.scan_process_range(process, range);
-            print_message(&format!("macho::symbols: string_table_scan_address = {:?}", string_table_scan_address));
-
-            // TODO: figure out what this means:
-            // https://www.reddit.com/r/jailbreakdevelopers/comments/ol9m1s/confusion_about_macho_offsets_and_addresses/
-
-            // TODO: iterate through symbol table
+            symbol_table_fileoff = process.read(page + offset_to_next_command + macho_offsets.symbol_table_offset as u32).ok()?;
+            number_of_symbols = process.read(page + offset_to_next_command + macho_offsets.number_of_symbols as u32).ok()?;
+            string_table_fileoff = process.read(page + offset_to_next_command + macho_offsets.string_table_offset as u32).ok()?;
+            print_message(&format!("macho::symbols: symbol_table_fileoff = {}, number_of_symbols = {}, string_table_fileoff = {}", symbol_table_fileoff, number_of_symbols, string_table_fileoff));
         } else if next_command == LC_DYSYMTAB {
             print_message(&format!("macho::symbols: found LC_DYSYMTAB at i = {}", i));
+        } else if next_command == LC_SEGMENT_64 {
+            print_message(&format!("macho::symbols: found LC_SEGMENT_64 at i = {}", i));
+            let vmaddr: u64 = process.read(page + offset_to_next_command + macho_offsets.segmentcommand64_vmaddr).ok()?;
+            let fileoff: u64 = process.read(page + offset_to_next_command + macho_offsets.segmentcommand64_fileoff).ok()?;
+            fileoff_to_vmaddr.insert(fileoff, vmaddr);
         }
         let command_size: u32 = process.read(page + offset_to_next_command + (macho_offsets.command_size as u64)).ok()?;
         offset_to_next_command += command_size;
+    }
+
+    if symbol_table_fileoff != 0 && number_of_symbols != 0 && string_table_fileoff != 0 {
+        // TODO: translate from fileoff to vmaddr
+        let symbol_table_contents: [u8; CSTR] = process.read(page + symbol_table_fileoff).ok()?;
+        print_message(&format!("macho::symbols: symbol table ~= {:X?}", &symbol_table_contents));
+
+        let string_table_contents: [u8; CSTR] = process.read(page + string_table_fileoff).ok()?;
+        print_message(&format!("macho::symbols: string table ~= {:X?}", &string_table_contents));
+
+        print_message(&format!("macho::symbols: predicted symbol table address via page = {:?}", page + symbol_table_fileoff));
+
+        let signature_symtab: Signature<CSTR> = Signature::new("A3 DE 00 00 3C 00 00 00 42 45 61 05 00 00 00 00 04 00 00 00 0F 01 00 00 F2 CE 23 00 00 00 00 00 31 00 00 00 0F 01 00 00 D6 CD 23 00 00 00 00 00 56 00 00 00 0F 0E 00 00 90 19 30 00 00 00 00 00 60 00 00 00 0F 01 00 00 A5 D0 23 00 00 00 00 00 6A 00 00 00 0F 0C 00 00 50 9A 2F 00 00 00 00 00 76 00 00 00 0F 01 00 00 37 D0 23 00 00 00 00 00 8F 00 00 00 0F 01 00 00 0B 8A 23 00 00 00 00 00");
+        let symbol_table_scan_address = signature_symtab.scan_process_range(process, range);
+        print_message(&format!("macho::symbols: symbol_table_scan_address = {:?}", symbol_table_scan_address));
+
+        print_message(&format!("macho::symbols: predicted string table address via page = {:?}", page + string_table_fileoff));
+
+        let signature_strtab: Signature<CSTR> = Signature::new("00 00 00 00 5F 41 4F 5F 63 6F 6D 70 61 72 65 5F 64 6F 75 62 6C 65 5F 61 6E 64 5F 73 77 61 70 5F 64 6F 75 62 6C 65 5F 65 6D 75 6C 61 74 69 6F 6E 00 5F 41 4F 5F 66 65 74 63 68 5F 63 6F 6D 70 61 72 65 5F 61 6E 64 5F 73 77 61 70 5F 65 6D 75 6C 61 74 69 6F 6E 00 5F 41 4F 5F 6C 6F 63 6B 73 00 5F 41 4F 5F 70 61 75 73 65 00 5F 41 4F 5F 70 74 5F 6C 6F 63 6B 00 5F 41 4F 5F 73 74 6F 72 65 5F");
+        let string_table_scan_address = signature_strtab.scan_process_range(process, range);
+        print_message(&format!("macho::symbols: string_table_scan_address = {:?}", string_table_scan_address));
+
+        // TODO: figure out what this means:
+        // https://www.reddit.com/r/jailbreakdevelopers/comments/ol9m1s/confusion_about_macho_offsets_and_addresses/
+
+        // TODO: iterate through symbol table
     }
 
     Some(iter::from_fn(move || {
