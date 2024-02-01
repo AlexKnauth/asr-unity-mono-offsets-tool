@@ -175,11 +175,12 @@ pub fn get_function_offset(macho_bytes: &[u8], function_name: &[u8]) -> Option<u
     let function_name_len = function_name.len();
 
     let mut offset_to_next_command: usize = macho_offsets.load_commands as usize;
-    for _i in 0..number_of_commands {
+    for i in 0..number_of_commands {
         // Check if load command is LC_SYMTAB
         let next_command: u32 = slice_read(macho_bytes, offset_to_next_command).ok()?;
         print_message(&format!("macho::get_function_offset: next_command = {}", next_command));
         if next_command == LC_SYMTAB {
+            print_message(&format!("macho::get_function_offset: found LC_SYMTAB at i = {}", i));
             let symbol_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.symbol_table_offset).ok()?;
             let number_of_symbols: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.number_of_symbols).ok()?;
             let string_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.string_table_offset).ok()?;
@@ -193,12 +194,11 @@ pub fn get_function_offset(macho_bytes: &[u8], function_name: &[u8]) -> Option<u
                     return Some(slice_read(macho_bytes, symbol_table_offset as usize + (j * macho_offsets.size_of_nlist_item) + macho_offsets.nlist_value).ok()?);
                 }
             }
-
-            break;
-        } else {
-            let command_size: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.command_size).ok()?;
-            offset_to_next_command += command_size as usize;
+        } else if next_command == LC_DYSYMTAB {
+            print_message(&format!("macho::get_function_offset: found LC_DYSYMTAB at i = {}", i));
         }
+        let command_size: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.command_size).ok()?;
+        offset_to_next_command += command_size as usize;
     }
     None
 }
@@ -221,9 +221,19 @@ pub fn symbols(
     let number_of_commands: u32 = process.read(page + (macho_offsets.number_of_commands as u64)).ok()?;
     print_message(&format!("macho::symbols: number_of_commands = {}", number_of_commands));
 
-    let offset_to_next_command: u64 = macho_offsets.load_commands as u64;
-    let next_command: i32 = process.read(page + offset_to_next_command).ok()?;
-    print_message(&format!("macho::symbols: next_command = {}", next_command));
+    let mut offset_to_next_command: u32 = macho_offsets.load_commands as u32;
+    for i in 0..number_of_commands {
+        // Check if load command is LC_SYMTAB or LC_DYSYMTAB
+        let next_command: u32 = process.read(page + offset_to_next_command).ok()?;
+        print_message(&format!("macho::symbols: next_command = {}", next_command));
+        if next_command == LC_SYMTAB {
+            print_message(&format!("macho::symbols: found LC_SYMTAB at i = {}", i));
+        } else if next_command == LC_DYSYMTAB {
+            print_message(&format!("macho::symbols: found LC_DYSYMTAB at i = {}", i));
+        } 
+        let command_size: u32 = process.read(page + offset_to_next_command + (macho_offsets.command_size as u64)).ok()?;
+        offset_to_next_command += command_size;
+    }
 
     Some(iter::from_fn(move || {
         None
