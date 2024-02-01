@@ -101,14 +101,14 @@ pub fn detect_pointer_size(process: &Process, module_range: (Address, u64)) -> O
 
 pub fn get_function_symbol_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
     let ma = get_function_address(process, range, macho_bytes, function_name);
-    let mb = symbols(process, range)?.find_map(|s| -> Option<Address> {
+    let mb = symbols(process, range).and_then(|mut ss| ss.find_map(|s| -> Option<Address> {
         let n = s.get_name::<CSTR>(process).ok()?;
         if n.matches(function_name) {
             Some(s.address)
         } else {
             None
         }
-    });
+    }));
     match (ma, mb) {
         (Some(a), Some(b)) => {
             if a == b {
