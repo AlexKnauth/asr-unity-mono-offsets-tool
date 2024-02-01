@@ -186,6 +186,9 @@ pub fn get_function_offset(macho_bytes: &[u8], function_name: &[u8]) -> Option<u
             let string_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.string_table_offset).ok()?;
             print_message(&format!("macho::get_function_offset: symbol_table_offset = {}, number_of_symbols = {}, string_table_offset = {}", symbol_table_offset, number_of_symbols, string_table_offset));
 
+            let string_table_contents: [u8; CSTR] = slice_read(macho_bytes, string_table_offset as usize).ok()?;
+            print_message(&format!("macho::symbols: string table ~= {:X?}", &string_table_contents));
+
             for j in 0..(number_of_symbols as usize) {
                 let symbol_name_offset: u32 = slice_read(macho_bytes, symbol_table_offset as usize + (j * macho_offsets.size_of_nlist_item)).ok()?;
                 let string_offset = string_table_offset as usize + symbol_name_offset as usize;
@@ -240,10 +243,16 @@ pub fn symbols(
             let string_table_contents: [u8; CSTR] = process.read(page + string_table_offset).ok()?;
             print_message(&format!("macho::symbols: string table ~= {:X?}", &string_table_contents));
 
+            print_message(&format!("macho::symbols: predicted string table address via page = {:?}", page + string_table_offset));
+
+            let signature: Signature<CSTR> = Signature::new("00 00 00 00 5F 41 4F 5F 63 6F 6D 70 61 72 65 5F 64 6F 75 62 6C 65 5F 61 6E 64 5F 73 77 61 70 5F 64 6F 75 62 6C 65 5F 65 6D 75 6C 61 74 69 6F 6E 00 5F 41 4F 5F 66 65 74 63 68 5F 63 6F 6D 70 61 72 65 5F 61 6E 64 5F 73 77 61 70 5F 65 6D 75 6C 61 74 69 6F 6E 00 5F 41 4F 5F 6C 6F 63 6B 73 00 5F 41 4F 5F 70 61 75 73 65 00 5F 41 4F 5F 70 74 5F 6C 6F 63 6B 00 5F 41 4F 5F 73 74 6F 72 65 5F");
+            let string_table_scan_address = signature.scan_process_range(process, range);
+            print_message(&format!("macho::symbols: string_table_scan_address = {:?}", string_table_scan_address));
+
             // TODO: iterate through symbol table
         } else if next_command == LC_DYSYMTAB {
             print_message(&format!("macho::symbols: found LC_DYSYMTAB at i = {}", i));
-        } 
+        }
         let command_size: u32 = process.read(page + offset_to_next_command + (macho_offsets.command_size as u64)).ok()?;
         offset_to_next_command += command_size;
     }
