@@ -215,27 +215,27 @@ pub fn symbols(
 ) -> Option<impl FusedIterator<Item = Symbol> + '_> {
     let page = scan_macho_page(process, range)?;
     let macho_offsets = MachOFormatOffsets::new();
-    let number_of_commands: u32 = process.read(page + (macho_offsets.number_of_commands as u64)).ok()?;
+    let number_of_commands: u32 = process.read(page + macho_offsets.number_of_commands).ok()?;
 
     let mut symbol_table_fileoff: u32 = 0;
     let mut number_of_symbols: u32 = 0;
     let mut string_table_fileoff: u32 = 0;
     let mut map_fileoff_to_vmaddr: BTreeMap<u64, u64> = BTreeMap::new();
 
-    let mut offset_to_next_command: u32 = macho_offsets.load_commands as u32;
+    let mut offset_to_next_command: u32 = macho_offsets.load_commands;
     for _i in 0..number_of_commands {
         // Check if load command is LC_SYMTAB or LC_SEGMENT_64
         let next_command: u32 = process.read(page + offset_to_next_command).ok()?;
         if next_command == LC_SYMTAB {
-            symbol_table_fileoff = process.read(page + offset_to_next_command + macho_offsets.symbol_table_offset as u32).ok()?;
-            number_of_symbols = process.read(page + offset_to_next_command + macho_offsets.number_of_symbols as u32).ok()?;
-            string_table_fileoff = process.read(page + offset_to_next_command + macho_offsets.string_table_offset as u32).ok()?;
+            symbol_table_fileoff = process.read(page + offset_to_next_command + macho_offsets.symbol_table_offset).ok()?;
+            number_of_symbols = process.read(page + offset_to_next_command + macho_offsets.number_of_symbols).ok()?;
+            string_table_fileoff = process.read(page + offset_to_next_command + macho_offsets.string_table_offset).ok()?;
         } else if next_command == LC_SEGMENT_64 {
             let vmaddr: u64 = process.read(page + offset_to_next_command + macho_offsets.segmentcommand64_vmaddr).ok()?;
             let fileoff: u64 = process.read(page + offset_to_next_command + macho_offsets.segmentcommand64_fileoff).ok()?;
             map_fileoff_to_vmaddr.insert(fileoff, vmaddr);
         }
-        let command_size: u32 = process.read(page + offset_to_next_command + (macho_offsets.command_size as u64)).ok()?;
+        let command_size: u32 = process.read(page + offset_to_next_command + macho_offsets.command_size).ok()?;
         offset_to_next_command += command_size;
     }
 
@@ -251,9 +251,9 @@ pub fn symbols(
     // https://www.reddit.com/r/jailbreakdevelopers/comments/ol9m1s/confusion_about_macho_offsets_and_addresses/
 
     Some((0..number_of_symbols).filter_map(move |j| {
-        let symbol_name_offset: u32 = process.read(page + symbol_table_vmaddr + (j * macho_offsets.size_of_nlist_item as u32)).ok()?;
+        let symbol_name_offset: u32 = process.read(page + symbol_table_vmaddr + (j * macho_offsets.size_of_nlist_item)).ok()?;
         let string_address = page + string_table_vmaddr + symbol_name_offset;
-        let symbol_fileoff = process.read(page + symbol_table_vmaddr + (j * macho_offsets.size_of_nlist_item as u32) + macho_offsets.nlist_value as u32).ok()?;
+        let symbol_fileoff = process.read(page + symbol_table_vmaddr + (j * macho_offsets.size_of_nlist_item) + macho_offsets.nlist_value).ok()?;
         let symbol_vmaddr = fileoff_to_vmaddr(&map_fileoff_to_vmaddr, symbol_fileoff);
         let symbol_address = page + symbol_vmaddr;
         Some(Symbol {
