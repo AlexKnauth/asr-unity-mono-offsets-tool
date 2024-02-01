@@ -6,7 +6,7 @@ use core::{
     iter::FusedIterator,
     mem,
 };
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 const CSTR: usize = 128;
 
