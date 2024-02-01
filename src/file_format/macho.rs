@@ -32,14 +32,14 @@ const LC_SEGMENT_64: u32 = 0x19;
 const HEADER_SIZE: usize = 32;
 
 struct MachOFormatOffsets {
-    number_of_commands: usize,
-    load_commands: usize,
-    command_size: usize,
-    symbol_table_offset: usize,
-    number_of_symbols: usize,
-    string_table_offset: usize,
-    nlist_value: usize,
-    size_of_nlist_item: usize,
+    number_of_commands: u32,
+    load_commands: u32,
+    command_size: u32,
+    symbol_table_offset: u32,
+    number_of_symbols: u32,
+    string_table_offset: u32,
+    nlist_value: u32,
+    size_of_nlist_item: u32,
     segmentcommand64_vmaddr: u32,
     segmentcommand64_fileoff: u32,
 }
@@ -162,7 +162,7 @@ pub fn get_function_address(process: &Process, range: (Address, u64), macho_byte
     let function_address_via_page = page + function_offset;
     // asr::print_message(&format!("macho get_function_address: function_address_via_page: {}", function_address_via_page));
     let bytes_via_page: [u8; 0x100] = process.read(function_address_via_page).ok()?;
-    let bytes_expected: [u8; 0x100] = slice_read(&macho_bytes2, function_offset as usize).ok()?;
+    let bytes_expected: [u8; 0x100] = slice_read(&macho_bytes2, function_offset).ok()?;
     if bytes_via_page != bytes_expected {
         // asr::print_message("BAD: bytes_via_page != bytes_expected");
     }
@@ -179,7 +179,7 @@ pub fn get_function_offset(macho_bytes: &[u8], function_name: &[u8]) -> Option<u
     print_message(&format!("macho::get_function_offset: number_of_commands = {}", number_of_commands));
     let function_name_len = function_name.len();
 
-    let mut offset_to_next_command: usize = macho_offsets.load_commands as usize;
+    let mut offset_to_next_command = macho_offsets.load_commands;
     for i in 0..number_of_commands {
         // Check if load command is LC_SYMTAB
         let next_command: u32 = slice_read(macho_bytes, offset_to_next_command).ok()?;
@@ -191,35 +191,36 @@ pub fn get_function_offset(macho_bytes: &[u8], function_name: &[u8]) -> Option<u
             let string_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.string_table_offset).ok()?;
             print_message(&format!("macho::get_function_offset: symbol_table_offset = {}, number_of_symbols = {}, string_table_offset = {}", symbol_table_offset, number_of_symbols, string_table_offset));
 
-            let symbol_table_contents: [u8; CSTR] = slice_read(macho_bytes, symbol_table_offset as usize).ok()?;
+            let symbol_table_contents: [u8; CSTR] = slice_read(macho_bytes, symbol_table_offset).ok()?;
             print_message(&format!("macho::get_function_offset: symbol table ~= {:X?}", &symbol_table_contents));
 
-            let string_table_contents: [u8; CSTR] = slice_read(macho_bytes, string_table_offset as usize).ok()?;
+            let string_table_contents: [u8; CSTR] = slice_read(macho_bytes, string_table_offset).ok()?;
             print_message(&format!("macho::get_function_offset: string table ~= {:X?}", &string_table_contents));
 
-            for j in 0..(number_of_symbols as usize) {
-                let symbol_name_offset: u32 = slice_read(macho_bytes, symbol_table_offset as usize + (j * macho_offsets.size_of_nlist_item)).ok()?;
+            for j in 0..(number_of_symbols) {
+                let symbol_name_offset: u32 = slice_read(macho_bytes, symbol_table_offset + (j * macho_offsets.size_of_nlist_item)).ok()?;
                 let string_offset = string_table_offset as usize + symbol_name_offset as usize;
                 let symbol_name: &[u8] = &macho_bytes[string_offset..(string_offset + function_name_len + 1)];
 
                 if symbol_name[function_name_len] == 0 && symbol_name.starts_with(function_name) {
-                    return Some(slice_read(macho_bytes, symbol_table_offset as usize + (j * macho_offsets.size_of_nlist_item) + macho_offsets.nlist_value).ok()?);
+                    return Some(slice_read(macho_bytes, symbol_table_offset + (j * macho_offsets.size_of_nlist_item) + macho_offsets.nlist_value).ok()?);
                 }
             }
         } else if next_command == LC_DYSYMTAB {
             print_message(&format!("macho::get_function_offset: found LC_DYSYMTAB at i = {}", i));
         }
         let command_size: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.command_size).ok()?;
-        offset_to_next_command += command_size as usize;
+        offset_to_next_command += command_size;
     }
     None
 }
 
 /// Reads a value of the type specified from the slice at the address
 /// given.
-pub fn slice_read<T: bytemuck::CheckedBitPattern>(slice: &[u8], address: usize) -> Result<T, bytemuck::checked::CheckedCastError> {
+pub fn slice_read<T: bytemuck::CheckedBitPattern, N: Into<u64>>(slice: &[u8], address: N) -> Result<T, bytemuck::checked::CheckedCastError> {
+    let start: usize = Into::<u64>::into(address) as usize;
     let size = mem::size_of::<T>();
-    let slice_src = &slice[address..(address + size)];
+    let slice_src = &slice[start..(start + size)];
     bytemuck::checked::try_from_bytes(slice_src).cloned()
 }
 
