@@ -3,7 +3,6 @@
 use asr::{print_message, signature::Signature, string::ArrayCString, Address, PointerSize, Process};
 
 use core::{
-    iter,
     iter::FusedIterator,
     mem,
 };
@@ -69,8 +68,6 @@ impl MachOFormatOffsets {
 pub struct Symbol {
     /// The address associated with the current function
     pub address: Address,
-    /// The size occupied in memory by the current function
-    pub size: u64,
     /// The address storing the name of the current function
     name_addr: Address,
 }
@@ -264,36 +261,43 @@ pub fn symbols(
         offset_to_next_command += command_size;
     }
 
-    if symbol_table_fileoff != 0 && number_of_symbols != 0 && string_table_fileoff != 0 {
-        // TODO: translate from fileoff to vmaddr
-        let symbol_table_vmaddr = fileoff_to_vmaddr(&map_fileoff_to_vmaddr, symbol_table_fileoff as u64);
-        print_message(&format!("macho::symbols: symbol_table_vmaddr = 0x{:X?}", symbol_table_vmaddr));
-        print_message(&format!("macho::symbols: page + symbol_table_vmaddr = 0x{:X?}", page + symbol_table_vmaddr));
-        let symbol_table_contents: [u8; CSTR] = process.read(page + symbol_table_vmaddr).ok()?;
-        print_message(&format!("macho::symbols: symbol table ~= {:X?}", &symbol_table_contents));
-
-        let string_table_vmaddr = fileoff_to_vmaddr(&map_fileoff_to_vmaddr, string_table_fileoff as u64);
-        print_message(&format!("macho::symbols: string_table_vmaddr = 0x{:X?}", string_table_vmaddr));
-        print_message(&format!("macho::symbols: page + string_table_vmaddr = 0x{:X?}", page + string_table_vmaddr));
-        let string_table_contents: [u8; CSTR] = process.read(page + string_table_vmaddr).ok()?;
-        print_message(&format!("macho::symbols: string table ~= {:X?}", &string_table_contents));
-
-        let signature_symtab: Signature<CSTR> = Signature::new("A3 DE 00 00 3C 00 00 00 42 45 61 05 00 00 00 00 04 00 00 00 0F 01 00 00 F2 CE 23 00 00 00 00 00 31 00 00 00 0F 01 00 00 D6 CD 23 00 00 00 00 00 56 00 00 00 0F 0E 00 00 90 19 30 00 00 00 00 00 60 00 00 00 0F 01 00 00 A5 D0 23 00 00 00 00 00 6A 00 00 00 0F 0C 00 00 50 9A 2F 00 00 00 00 00 76 00 00 00 0F 01 00 00 37 D0 23 00 00 00 00 00 8F 00 00 00 0F 01 00 00 0B 8A 23 00 00 00 00 00");
-        let symbol_table_scan_address = signature_symtab.scan_process_range(process, range);
-        print_message(&format!("macho::symbols: symbol_table_scan_address = {:?}", symbol_table_scan_address));
-
-        let signature_strtab: Signature<CSTR> = Signature::new("00 00 00 00 5F 41 4F 5F 63 6F 6D 70 61 72 65 5F 64 6F 75 62 6C 65 5F 61 6E 64 5F 73 77 61 70 5F 64 6F 75 62 6C 65 5F 65 6D 75 6C 61 74 69 6F 6E 00 5F 41 4F 5F 66 65 74 63 68 5F 63 6F 6D 70 61 72 65 5F 61 6E 64 5F 73 77 61 70 5F 65 6D 75 6C 61 74 69 6F 6E 00 5F 41 4F 5F 6C 6F 63 6B 73 00 5F 41 4F 5F 70 61 75 73 65 00 5F 41 4F 5F 70 74 5F 6C 6F 63 6B 00 5F 41 4F 5F 73 74 6F 72 65 5F");
-        let string_table_scan_address = signature_strtab.scan_process_range(process, range);
-        print_message(&format!("macho::symbols: string_table_scan_address = {:?}", string_table_scan_address));
-
-        // TODO: figure out what this means:
-        // https://www.reddit.com/r/jailbreakdevelopers/comments/ol9m1s/confusion_about_macho_offsets_and_addresses/
-
-        // TODO: iterate through symbol table
+    if symbol_table_fileoff == 0 || number_of_symbols == 0 || string_table_fileoff == 0 {
+        return None;
     }
+    
+    let symbol_table_vmaddr = fileoff_to_vmaddr(&map_fileoff_to_vmaddr, symbol_table_fileoff as u64);
+    print_message(&format!("macho::symbols: symbol_table_vmaddr = 0x{:X?}", symbol_table_vmaddr));
+    print_message(&format!("macho::symbols: page + symbol_table_vmaddr = 0x{:X?}", page + symbol_table_vmaddr));
+    let symbol_table_contents: [u8; CSTR] = process.read(page + symbol_table_vmaddr).ok()?;
+    print_message(&format!("macho::symbols: symbol table ~= {:X?}", &symbol_table_contents));
 
-    Some(iter::from_fn(move || {
-        None
+    let string_table_vmaddr = fileoff_to_vmaddr(&map_fileoff_to_vmaddr, string_table_fileoff as u64);
+    print_message(&format!("macho::symbols: string_table_vmaddr = 0x{:X?}", string_table_vmaddr));
+    print_message(&format!("macho::symbols: page + string_table_vmaddr = 0x{:X?}", page + string_table_vmaddr));
+    let string_table_contents: [u8; CSTR] = process.read(page + string_table_vmaddr).ok()?;
+    print_message(&format!("macho::symbols: string table ~= {:X?}", &string_table_contents));
+
+    let signature_symtab: Signature<CSTR> = Signature::new("A3 DE 00 00 3C 00 00 00 42 45 61 05 00 00 00 00 04 00 00 00 0F 01 00 00 F2 CE 23 00 00 00 00 00 31 00 00 00 0F 01 00 00 D6 CD 23 00 00 00 00 00 56 00 00 00 0F 0E 00 00 90 19 30 00 00 00 00 00 60 00 00 00 0F 01 00 00 A5 D0 23 00 00 00 00 00 6A 00 00 00 0F 0C 00 00 50 9A 2F 00 00 00 00 00 76 00 00 00 0F 01 00 00 37 D0 23 00 00 00 00 00 8F 00 00 00 0F 01 00 00 0B 8A 23 00 00 00 00 00");
+    let symbol_table_scan_address = signature_symtab.scan_process_range(process, range);
+    print_message(&format!("macho::symbols: symbol_table_scan_address = {:?}", symbol_table_scan_address));
+
+    let signature_strtab: Signature<CSTR> = Signature::new("00 00 00 00 5F 41 4F 5F 63 6F 6D 70 61 72 65 5F 64 6F 75 62 6C 65 5F 61 6E 64 5F 73 77 61 70 5F 64 6F 75 62 6C 65 5F 65 6D 75 6C 61 74 69 6F 6E 00 5F 41 4F 5F 66 65 74 63 68 5F 63 6F 6D 70 61 72 65 5F 61 6E 64 5F 73 77 61 70 5F 65 6D 75 6C 61 74 69 6F 6E 00 5F 41 4F 5F 6C 6F 63 6B 73 00 5F 41 4F 5F 70 61 75 73 65 00 5F 41 4F 5F 70 74 5F 6C 6F 63 6B 00 5F 41 4F 5F 73 74 6F 72 65 5F");
+    let string_table_scan_address = signature_strtab.scan_process_range(process, range);
+    print_message(&format!("macho::symbols: string_table_scan_address = {:?}", string_table_scan_address));
+
+    // TODO: figure out what this means:
+    // https://www.reddit.com/r/jailbreakdevelopers/comments/ol9m1s/confusion_about_macho_offsets_and_addresses/
+
+    Some((0..number_of_symbols).filter_map(move |j| {
+        let symbol_name_offset: u32 = process.read(page + symbol_table_vmaddr + (j * macho_offsets.size_of_nlist_item as u32)).ok()?;
+        let string_address = page + string_table_vmaddr + symbol_name_offset;
+        let symbol_fileoff = process.read(page + symbol_table_vmaddr + (j * macho_offsets.size_of_nlist_item as u32) + macho_offsets.nlist_value as u32).ok()?;
+        let symbol_vmaddr = fileoff_to_vmaddr(&map_fileoff_to_vmaddr, symbol_fileoff);
+        let symbol_address = page + symbol_vmaddr;
+        Some(Symbol {
+            address: symbol_address,
+            name_addr: string_address,
+        })
     })
     .fuse())
 }
