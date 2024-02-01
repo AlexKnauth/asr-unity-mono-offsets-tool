@@ -234,6 +234,12 @@ pub fn symbols(
             let string_table_offset: u32 = process.read(page + offset_to_next_command + macho_offsets.string_table_offset as u32).ok()?;
             print_message(&format!("macho::symbols: symbol_table_offset = {}, number_of_symbols = {}, string_table_offset = {}", symbol_table_offset, number_of_symbols, string_table_offset));
 
+            let symbol_table_contents: [u8; CSTR] = process.read(page + symbol_table_offset).ok()?;
+            print_message(&format!("macho::symbols: symbol table ~= {:X?}", &symbol_table_contents));
+
+            let string_table_contents: [u8; CSTR] = process.read(page + string_table_offset).ok()?;
+            print_message(&format!("macho::symbols: string table ~= {:X?}", &string_table_contents));
+
             // TODO: iterate through symbol table
         } else if next_command == LC_DYSYMTAB {
             print_message(&format!("macho::symbols: found LC_DYSYMTAB at i = {}", i));
