@@ -17,6 +17,15 @@ const MH_CIGAM_32: u32 = 0xcefaedfe;
 const MH_MAGIC_64: u32 = 0xfeedfacf;
 const MH_CIGAM_64: u32 = 0xcffaedfe;
 
+// Constants for the cmd field of load commands, the type
+// https://opensource.apple.com/source/xnu/xnu-4570.71.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html
+/// link-edit stab symbol table info
+/// see also symtab_command
+const LC_SYMTAB: u32 = 0x2;
+/// dynamic link-edit symbol table info
+/// see also dysymtab_command
+const LC_DYSYMTAB: u32 = 0xb;
+
 const HEADER_SIZE: usize = 32;
 
 struct MachOFormatOffsets {
@@ -168,9 +177,9 @@ pub fn get_function_offset(macho_bytes: &[u8], function_name: &[u8]) -> Option<u
     let mut offset_to_next_command: usize = macho_offsets.load_commands as usize;
     for _i in 0..number_of_commands {
         // Check if load command is LC_SYMTAB
-        let next_command: i32 = slice_read(macho_bytes, offset_to_next_command).ok()?;
+        let next_command: u32 = slice_read(macho_bytes, offset_to_next_command).ok()?;
         print_message(&format!("macho::get_function_offset: next_command = {}", next_command));
-        if next_command == 2 {
+        if next_command == LC_SYMTAB {
             let symbol_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.symbol_table_offset).ok()?;
             let number_of_symbols: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.number_of_symbols).ok()?;
             let string_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.string_table_offset).ok()?;
