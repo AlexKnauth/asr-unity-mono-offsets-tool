@@ -112,22 +112,22 @@ pub fn get_function_symbol_address(process: &Process, range: (Address, u64), mac
     match (ma, mb) {
         (Some(a), Some(b)) => {
             if a == b {
-                asr::print_message(&format!("elf::get_function_symbol_address: all good, both Some and equal"));
+                asr::print_message(&format!("macho::get_function_symbol_address: all good, both Some and equal"));
             } else {
-                asr::print_message(&format!("elf::get_function_symbol_address: mismatch, {} != {}", a, b));
+                asr::print_message(&format!("macho::get_function_symbol_address: mismatch, {} != {}", a, b));
             }
             Some(a)
         }
         (Some(a), None) => {
-            asr::print_message("elf::get_function_symbol_address: only get_function_address worked");
+            asr::print_message("macho::get_function_symbol_address: only get_function_address worked");
             Some(a)
         }
         (None, Some(b)) => {
-            asr::print_message("elf::get_function_symbol_address: only elf::symbols worked");
+            asr::print_message("macho::get_function_symbol_address: only macho::symbols worked");
             Some(b)
         }
         (None, None) => {
-            asr::print_message("elf::get_function_symbol_address: both failed");
+            asr::print_message("macho::get_function_symbol_address: both failed");
             None
         }
     }
