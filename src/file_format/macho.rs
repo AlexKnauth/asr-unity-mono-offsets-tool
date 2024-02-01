@@ -178,12 +178,13 @@ pub fn get_function_offset(macho_bytes: &[u8], function_name: &[u8]) -> Option<u
     for i in 0..number_of_commands {
         // Check if load command is LC_SYMTAB
         let next_command: u32 = slice_read(macho_bytes, offset_to_next_command).ok()?;
-        print_message(&format!("macho::get_function_offset: next_command = {}", next_command));
+        // print_message(&format!("macho::get_function_offset: next_command = {}", next_command));
         if next_command == LC_SYMTAB {
             print_message(&format!("macho::get_function_offset: found LC_SYMTAB at i = {}", i));
             let symbol_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.symbol_table_offset).ok()?;
             let number_of_symbols: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.number_of_symbols).ok()?;
             let string_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.string_table_offset).ok()?;
+            print_message(&format!("macho::get_function_offset: symbol_table_offset = {}, number_of_symbols = {}, string_table_offset = {}", symbol_table_offset, number_of_symbols, string_table_offset));
 
             for j in 0..(number_of_symbols as usize) {
                 let symbol_name_offset: u32 = slice_read(macho_bytes, symbol_table_offset as usize + (j * macho_offsets.size_of_nlist_item)).ok()?;
@@ -225,9 +226,15 @@ pub fn symbols(
     for i in 0..number_of_commands {
         // Check if load command is LC_SYMTAB or LC_DYSYMTAB
         let next_command: u32 = process.read(page + offset_to_next_command).ok()?;
-        print_message(&format!("macho::symbols: next_command = {}", next_command));
+        // print_message(&format!("macho::symbols: next_command = {}", next_command));
         if next_command == LC_SYMTAB {
             print_message(&format!("macho::symbols: found LC_SYMTAB at i = {}", i));
+            let symbol_table_offset: u32 = process.read(page + offset_to_next_command + macho_offsets.symbol_table_offset as u32).ok()?;
+            let number_of_symbols: u32 = process.read(page + offset_to_next_command + macho_offsets.number_of_symbols as u32).ok()?;
+            let string_table_offset: u32 = process.read(page + offset_to_next_command + macho_offsets.string_table_offset as u32).ok()?;
+            print_message(&format!("macho::symbols: symbol_table_offset = {}, number_of_symbols = {}, string_table_offset = {}", symbol_table_offset, number_of_symbols, string_table_offset));
+
+            // TODO: iterate through symbol table
         } else if next_command == LC_DYSYMTAB {
             print_message(&format!("macho::symbols: found LC_DYSYMTAB at i = {}", i));
         } 
