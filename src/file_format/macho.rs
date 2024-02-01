@@ -1,6 +1,6 @@
 //! Support for parsing MachO files
 
-use asr::{print_message, signature::Signature, string::ArrayCString, Address, PointerSize, Process};
+use asr::{signature::Signature, string::ArrayCString, Address, PointerSize, Process};
 
 use core::{
     iter::FusedIterator,
@@ -22,9 +22,6 @@ const MH_CIGAM_64: u32 = 0xcffaedfe;
 /// link-edit stab symbol table info
 /// see also symtab_command
 const LC_SYMTAB: u32 = 0x2;
-/// dynamic link-edit symbol table info
-/// see also dysymtab_command
-const LC_DYSYMTAB: u32 = 0xb;
 /// 64-bit segment of this file to be mapped
 /// see also segment_command_64
 const LC_SEGMENT_64: u32 = 0x19;
@@ -176,26 +173,16 @@ pub fn get_function_address(process: &Process, range: (Address, u64), macho_byte
 pub fn get_function_offset(macho_bytes: &[u8], function_name: &[u8]) -> Option<u32> {
     let macho_offsets = MachOFormatOffsets::new();
     let number_of_commands: u32 = slice_read(macho_bytes, macho_offsets.number_of_commands).ok()?;
-    print_message(&format!("macho::get_function_offset: number_of_commands = {}", number_of_commands));
     let function_name_len = function_name.len();
 
     let mut offset_to_next_command = macho_offsets.load_commands;
-    for i in 0..number_of_commands {
+    for _i in 0..number_of_commands {
         // Check if load command is LC_SYMTAB
         let next_command: u32 = slice_read(macho_bytes, offset_to_next_command).ok()?;
-        // print_message(&format!("macho::get_function_offset: next_command = {}", next_command));
         if next_command == LC_SYMTAB {
-            print_message(&format!("macho::get_function_offset: found LC_SYMTAB at i = {}", i));
             let symbol_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.symbol_table_offset).ok()?;
             let number_of_symbols: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.number_of_symbols).ok()?;
             let string_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.string_table_offset).ok()?;
-            print_message(&format!("macho::get_function_offset: symbol_table_offset = {}, number_of_symbols = {}, string_table_offset = {}", symbol_table_offset, number_of_symbols, string_table_offset));
-
-            let symbol_table_contents: [u8; CSTR] = slice_read(macho_bytes, symbol_table_offset).ok()?;
-            print_message(&format!("macho::get_function_offset: symbol table ~= {:X?}", &symbol_table_contents));
-
-            let string_table_contents: [u8; CSTR] = slice_read(macho_bytes, string_table_offset).ok()?;
-            print_message(&format!("macho::get_function_offset: string table ~= {:X?}", &string_table_contents));
 
             for j in 0..(number_of_symbols) {
                 let symbol_name_offset: u32 = slice_read(macho_bytes, symbol_table_offset + (j * macho_offsets.size_of_nlist_item)).ok()?;
@@ -206,8 +193,6 @@ pub fn get_function_offset(macho_bytes: &[u8], function_name: &[u8]) -> Option<u
                     return Some(slice_read(macho_bytes, symbol_table_offset + (j * macho_offsets.size_of_nlist_item) + macho_offsets.nlist_value).ok()?);
                 }
             }
-        } else if next_command == LC_DYSYMTAB {
-            print_message(&format!("macho::get_function_offset: found LC_DYSYMTAB at i = {}", i));
         }
         let command_size: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.command_size).ok()?;
         offset_to_next_command += command_size;
