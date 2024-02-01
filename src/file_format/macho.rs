@@ -1,6 +1,6 @@
 //! Support for parsing MachO files
 
-use asr::{signature::Signature, string::ArrayCString, Address, PointerSize, Process};
+use asr::{print_message, signature::Signature, string::ArrayCString, Address, PointerSize, Process};
 
 use core::{
     iter,
@@ -162,12 +162,14 @@ pub fn get_function_address(process: &Process, range: (Address, u64), macho_byte
 pub fn get_function_offset(macho_bytes: &[u8], function_name: &[u8]) -> Option<u32> {
     let macho_offsets = MachOFormatOffsets::new();
     let number_of_commands: u32 = slice_read(macho_bytes, macho_offsets.number_of_commands).ok()?;
+    print_message(&format!("macho::get_function_offset: number_of_commands = {}", number_of_commands));
     let function_name_len = function_name.len();
 
     let mut offset_to_next_command: usize = macho_offsets.load_commands as usize;
     for _i in 0..number_of_commands {
         // Check if load command is LC_SYMTAB
         let next_command: i32 = slice_read(macho_bytes, offset_to_next_command).ok()?;
+        print_message(&format!("macho::get_function_offset: next_command = {}", next_command));
         if next_command == 2 {
             let symbol_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.symbol_table_offset).ok()?;
             let number_of_symbols: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.number_of_symbols).ok()?;
@@ -206,8 +208,14 @@ pub fn symbols(
 ) -> Option<impl FusedIterator<Item = Symbol> + '_> {
     // NOTE: this page address is probably ONLY good for the header, NOT the function address
     let page = scan_macho_page(process, range)?;
-    let _header: [u8; HEADER_SIZE] = process.read(page).ok()?;
-    
+    let macho_offsets = MachOFormatOffsets::new();
+    let number_of_commands: u32 = process.read(page + (macho_offsets.number_of_commands as u64)).ok()?;
+    print_message(&format!("macho::symbols: number_of_commands = {}", number_of_commands));
+
+    let offset_to_next_command: u64 = macho_offsets.load_commands as u64;
+    let next_command: i32 = process.read(page + offset_to_next_command).ok()?;
+    print_message(&format!("macho::symbols: next_command = {}", next_command));
+
     Some(iter::from_fn(move || {
         None
     })
