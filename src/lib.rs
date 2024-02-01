@@ -231,7 +231,7 @@ async fn option_main(process: &Process, name: &str) -> Option<()> {
         },
         BinaryFormat::MachO => {
             let mono_bytes = file_read_all_bytes(mono_path).ok()?;
-            macho::get_function_address(process, mono_range, &mono_bytes, b"_mono_assembly_foreach")?
+            macho::get_function_symbol_address(process, mono_range, &mono_bytes, b"_mono_assembly_foreach")?
         }
     };
     asr::print_message(&format!("mono_assembly_foreach_address: {}", mono_assembly_foreach_address));

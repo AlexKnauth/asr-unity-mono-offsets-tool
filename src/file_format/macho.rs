@@ -1,8 +1,14 @@
 //! Support for parsing MachO files
 
-use asr::{signature::Signature, Address, PointerSize, Process};
+use asr::{signature::Signature, string::ArrayCString, Address, PointerSize, Process};
 
-use core::mem;
+use core::{
+    iter,
+    iter::FusedIterator,
+    mem,
+};
+
+const CSTR: usize = 128;
 
 // Magic mach-o header constants from:
 // https://opensource.apple.com/source/xnu/xnu-4570.71.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html
@@ -42,6 +48,26 @@ impl MachOFormatOffsets {
     }
 }
 
+/// A symbol exported into the current module.
+pub struct Symbol {
+    /// The address associated with the current function
+    pub address: Address,
+    /// The size occupied in memory by the current function
+    pub size: u64,
+    /// The address storing the name of the current function
+    name_addr: Address,
+}
+
+impl Symbol {
+    /// Tries to retrieve the name of the current function
+    pub fn get_name<const CAP: usize>(
+        &self,
+        process: &Process,
+    ) -> Result<ArrayCString<CAP>, asr::Error> {
+        process.read(self.name_addr)
+    }
+}
+
 /// Scans the range for a page that begins with MachO Magic
 pub fn scan_macho_page(process: &Process, range: (Address, u64)) -> Option<Address> {
     const PAGE_SIZE: u64 = 0x1000;
@@ -72,6 +98,40 @@ pub fn detect_pointer_size(process: &Process, module_range: (Address, u64)) -> O
     }
 }
 
+
+pub fn get_function_symbol_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
+    let ma = get_function_address(process, range, macho_bytes, function_name);
+    let mb = symbols(process, range)?.find_map(|s| -> Option<Address> {
+        let n = s.get_name::<CSTR>(process).ok()?;
+        if n.matches(function_name) {
+            Some(s.address)
+        } else {
+            None
+        }
+    });
+    match (ma, mb) {
+        (Some(a), Some(b)) => {
+            if a == b {
+                asr::print_message(&format!("elf::get_function_symbol_address: all good, both Some and equal"));
+            } else {
+                asr::print_message(&format!("elf::get_function_symbol_address: mismatch, {} != {}", a, b));
+            }
+            Some(a)
+        }
+        (Some(a), None) => {
+            asr::print_message("elf::get_function_symbol_address: only get_function_address worked");
+            Some(a)
+        }
+        (None, Some(b)) => {
+            asr::print_message("elf::get_function_symbol_address: only elf::symbols worked");
+            Some(b)
+        }
+        (None, None) => {
+            asr::print_message("elf::get_function_symbol_address: both failed");
+            None
+        }
+    }
+}
 
 /// Finds the address of a function from a MachO module range and file contents.
 pub fn get_function_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
@@ -138,4 +198,18 @@ pub fn slice_read<T: bytemuck::CheckedBitPattern>(slice: &[u8], address: usize) 
     let size = mem::size_of::<T>();
     let slice_src = &slice[address..(address + size)];
     bytemuck::checked::try_from_bytes(slice_src).cloned()
+}
+
+pub fn symbols(
+    process: &Process,
+    range: (Address, u64),
+) -> Option<impl FusedIterator<Item = Symbol> + '_> {
+    // NOTE: this page address is probably ONLY good for the header, NOT the function address
+    let page = scan_macho_page(process, range)?;
+    let _header: [u8; HEADER_SIZE] = process.read(page).ok()?;
+    
+    Some(iter::from_fn(move || {
+        None
+    })
+    .fuse())
 }
