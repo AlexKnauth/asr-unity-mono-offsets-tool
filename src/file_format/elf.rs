@@ -1,10 +1,8 @@
 use core::mem;
 
-use asr::{file_format::elf::Info, signature::Signature, Address, Process};
+use asr::{file_format::elf::Info, signature::Signature, Address, PointerSize, Process};
 pub use asr::file_format::elf;
 use bytemuck::{Pod, Zeroable};
-
-use crate::binary_format::DerefType;
 
 // --------------------------------------------------------
 
@@ -108,14 +106,17 @@ pub fn scan_elf_page(process: &Process, range: (Address, u64)) -> Option<Address
     None
 }
 
-pub fn detect_deref_type(process: &Process, module_range: (Address, u64)) -> Option<DerefType> {
+pub fn detect_pointer_size(process: &Process, module_range: (Address, u64)) -> Option<PointerSize> {
+    // TODO: see if all this can be avoided / replaced with just asr::file_format::elf
+    // functions such as asr::file_format::elf::is_64_bit ?
+    // in particular, can the scan_elf_page be removed?
     let header_address = scan_elf_page(process, module_range)?;
     let header_bytes: [u8; HEADER_SIZE] = process.read(header_address).ok()?;
     let info = Info::parse(&header_bytes)?;
     if info.bitness.is_64() {
-        Some(DerefType::Bit64)
+        Some(PointerSize::Bit64)
     } else if info.bitness.is_32() {
-        Some(DerefType::Bit32)
+        Some(PointerSize::Bit32)
     } else {
         None
     }

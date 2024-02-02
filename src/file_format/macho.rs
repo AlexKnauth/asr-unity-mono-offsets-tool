@@ -1,10 +1,14 @@
 //! Support for parsing MachO files
 
-use asr::{Process, Address, signature::Signature};
+use asr::{signature::Signature, string::ArrayCString, Address, PointerSize, Process};
 
-use core::mem;
+use core::{
+    iter::FusedIterator,
+    mem,
+};
+use alloc::collections::BTreeMap;
 
-use crate::binary_format::DerefType;
+const CSTR: usize = 128;
 
 // Magic mach-o header constants from:
 // https://opensource.apple.com/source/xnu/xnu-4570.71.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html
@@ -13,17 +17,28 @@ const MH_CIGAM_32: u32 = 0xcefaedfe;
 const MH_MAGIC_64: u32 = 0xfeedfacf;
 const MH_CIGAM_64: u32 = 0xcffaedfe;
 
+// Constants for the cmd field of load commands, the type
+// https://opensource.apple.com/source/xnu/xnu-4570.71.2/EXTERNAL_HEADERS/mach-o/loader.h.auto.html
+/// link-edit stab symbol table info
+/// see also symtab_command
+const LC_SYMTAB: u32 = 0x2;
+/// 64-bit segment of this file to be mapped
+/// see also segment_command_64
+const LC_SEGMENT_64: u32 = 0x19;
+
 const HEADER_SIZE: usize = 32;
 
 struct MachOFormatOffsets {
-    number_of_commands: usize,
-    load_commands: usize,
-    command_size: usize,
-    symbol_table_offset: usize,
-    number_of_symbols: usize,
-    string_table_offset: usize,
-    nlist_value: usize,
-    size_of_nlist_item: usize,
+    number_of_commands: u32,
+    load_commands: u32,
+    command_size: u32,
+    symbol_table_offset: u32,
+    number_of_symbols: u32,
+    string_table_offset: u32,
+    nlist_value: u32,
+    size_of_nlist_item: u32,
+    segmentcommand64_vmaddr: u32,
+    segmentcommand64_fileoff: u32,
 }
 
 impl MachOFormatOffsets {
@@ -40,7 +55,27 @@ impl MachOFormatOffsets {
             string_table_offset: 0x10,
             nlist_value: 0x08,
             size_of_nlist_item: 0x10,
+            segmentcommand64_vmaddr: 0x18,
+            segmentcommand64_fileoff: 0x28,
         }
+    }
+}
+
+/// A symbol exported into the current module.
+pub struct Symbol {
+    /// The address associated with the current function
+    pub address: Address,
+    /// The address storing the name of the current function
+    name_addr: Address,
+}
+
+impl Symbol {
+    /// Tries to retrieve the name of the current function
+    pub fn get_name<const CAP: usize>(
+        &self,
+        process: &Process,
+    ) -> Result<ArrayCString<CAP>, asr::Error> {
+        process.read(self.name_addr)
     }
 }
 
@@ -64,16 +99,50 @@ pub fn scan_macho_page(process: &Process, range: (Address, u64)) -> Option<Addre
     None
 }
 
-pub fn detect_deref_type(process: &Process, module_range: (Address, u64)) -> Option<DerefType> {
+pub fn detect_pointer_size(process: &Process, module_range: (Address, u64)) -> Option<PointerSize> {
     let magic_address = scan_macho_page(process, module_range)?;
     let magic: u32 = process.read(magic_address).ok()?;
     match magic {
-        MH_MAGIC_64 | MH_CIGAM_64 => Some(DerefType::Bit64),
-        MH_MAGIC_32 | MH_CIGAM_32 => Some(DerefType::Bit32),
+        MH_MAGIC_64 | MH_CIGAM_64 => Some(PointerSize::Bit64),
+        MH_MAGIC_32 | MH_CIGAM_32 => Some(PointerSize::Bit32),
         _ => None
     }
 }
 
+
+pub fn get_function_symbol_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
+    let ma = get_function_address(process, range, macho_bytes, function_name);
+    let mb = symbols(process, range).and_then(|mut ss| ss.find_map(|s| -> Option<Address> {
+        let n = s.get_name::<CSTR>(process).ok()?;
+        if n.matches(function_name) {
+            Some(s.address)
+        } else {
+            None
+        }
+    }));
+    match (ma, mb) {
+        (Some(a), Some(b)) => {
+            if a == b {
+                asr::print_message(&format!("macho::get_function_symbol_address: all good, both Some and equal"));
+            } else {
+                asr::print_message(&format!("macho::get_function_symbol_address: mismatch, {} != {}", a, b));
+            }
+            Some(a)
+        }
+        (Some(a), None) => {
+            asr::print_message("macho::get_function_symbol_address: only get_function_address worked");
+            Some(a)
+        }
+        (None, Some(b)) => {
+            asr::print_message("macho::get_function_symbol_address: only macho::symbols worked");
+            Some(b)
+        }
+        (None, None) => {
+            asr::print_message("macho::get_function_symbol_address: both failed");
+            None
+        }
+    }
+}
 
 /// Finds the address of a function from a MachO module range and file contents.
 pub fn get_function_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
@@ -90,7 +159,7 @@ pub fn get_function_address(process: &Process, range: (Address, u64), macho_byte
     let function_address_via_page = page + function_offset;
     // asr::print_message(&format!("macho get_function_address: function_address_via_page: {}", function_address_via_page));
     let bytes_via_page: [u8; 0x100] = process.read(function_address_via_page).ok()?;
-    let bytes_expected: [u8; 0x100] = slice_read(&macho_bytes2, function_offset as usize).ok()?;
+    let bytes_expected: [u8; 0x100] = slice_read(&macho_bytes2, function_offset).ok()?;
     if bytes_via_page != bytes_expected {
         // asr::print_message("BAD: bytes_via_page != bytes_expected");
     }
@@ -106,38 +175,100 @@ pub fn get_function_offset(macho_bytes: &[u8], function_name: &[u8]) -> Option<u
     let number_of_commands: u32 = slice_read(macho_bytes, macho_offsets.number_of_commands).ok()?;
     let function_name_len = function_name.len();
 
-    let mut offset_to_next_command: usize = macho_offsets.load_commands as usize;
+    let mut offset_to_next_command = macho_offsets.load_commands;
     for _i in 0..number_of_commands {
         // Check if load command is LC_SYMTAB
-        let next_command: i32 = slice_read(macho_bytes, offset_to_next_command).ok()?;
-        if next_command == 2 {
+        let next_command: u32 = slice_read(macho_bytes, offset_to_next_command).ok()?;
+        if next_command == LC_SYMTAB {
             let symbol_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.symbol_table_offset).ok()?;
             let number_of_symbols: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.number_of_symbols).ok()?;
             let string_table_offset: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.string_table_offset).ok()?;
 
-            for j in 0..(number_of_symbols as usize) {
-                let symbol_name_offset: u32 = slice_read(macho_bytes, symbol_table_offset as usize + (j * macho_offsets.size_of_nlist_item)).ok()?;
+            for j in 0..(number_of_symbols) {
+                let symbol_name_offset: u32 = slice_read(macho_bytes, symbol_table_offset + (j * macho_offsets.size_of_nlist_item)).ok()?;
                 let string_offset = string_table_offset as usize + symbol_name_offset as usize;
                 let symbol_name: &[u8] = &macho_bytes[string_offset..(string_offset + function_name_len + 1)];
 
                 if symbol_name[function_name_len] == 0 && symbol_name.starts_with(function_name) {
-                    return Some(slice_read(macho_bytes, symbol_table_offset as usize + (j * macho_offsets.size_of_nlist_item) + macho_offsets.nlist_value).ok()?);
+                    return Some(slice_read(macho_bytes, symbol_table_offset + (j * macho_offsets.size_of_nlist_item) + macho_offsets.nlist_value).ok()?);
                 }
             }
-
-            break;
-        } else {
-            let command_size: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.command_size).ok()?;
-            offset_to_next_command += command_size as usize;
         }
+        let command_size: u32 = slice_read(macho_bytes, offset_to_next_command + macho_offsets.command_size).ok()?;
+        offset_to_next_command += command_size;
     }
     None
 }
 
 /// Reads a value of the type specified from the slice at the address
 /// given.
-pub fn slice_read<T: bytemuck::CheckedBitPattern>(slice: &[u8], address: usize) -> Result<T, bytemuck::checked::CheckedCastError> {
+pub fn slice_read<T: bytemuck::CheckedBitPattern, N: Into<u64>>(slice: &[u8], address: N) -> Result<T, bytemuck::checked::CheckedCastError> {
+    let start: usize = Into::<u64>::into(address) as usize;
     let size = mem::size_of::<T>();
-    let slice_src = &slice[address..(address + size)];
+    let slice_src = &slice[start..(start + size)];
     bytemuck::checked::try_from_bytes(slice_src).cloned()
+}
+
+pub fn symbols(
+    process: &Process,
+    range: (Address, u64),
+) -> Option<impl FusedIterator<Item = Symbol> + '_> {
+    let page = scan_macho_page(process, range)?;
+    let macho_offsets = MachOFormatOffsets::new();
+    let number_of_commands: u32 = process.read(page + macho_offsets.number_of_commands).ok()?;
+
+    let mut symbol_table_fileoff: u32 = 0;
+    let mut number_of_symbols: u32 = 0;
+    let mut string_table_fileoff: u32 = 0;
+    let mut map_fileoff_to_vmaddr: BTreeMap<u64, u64> = BTreeMap::new();
+
+    let mut offset_to_next_command: u32 = macho_offsets.load_commands;
+    for _i in 0..number_of_commands {
+        // Check if load command is LC_SYMTAB or LC_SEGMENT_64
+        let next_command: u32 = process.read(page + offset_to_next_command).ok()?;
+        if next_command == LC_SYMTAB {
+            symbol_table_fileoff = process.read(page + offset_to_next_command + macho_offsets.symbol_table_offset).ok()?;
+            number_of_symbols = process.read(page + offset_to_next_command + macho_offsets.number_of_symbols).ok()?;
+            string_table_fileoff = process.read(page + offset_to_next_command + macho_offsets.string_table_offset).ok()?;
+        } else if next_command == LC_SEGMENT_64 {
+            let vmaddr: u64 = process.read(page + offset_to_next_command + macho_offsets.segmentcommand64_vmaddr).ok()?;
+            let fileoff: u64 = process.read(page + offset_to_next_command + macho_offsets.segmentcommand64_fileoff).ok()?;
+            map_fileoff_to_vmaddr.insert(fileoff, vmaddr);
+        }
+        let command_size: u32 = process.read(page + offset_to_next_command + macho_offsets.command_size).ok()?;
+        offset_to_next_command += command_size;
+    }
+
+    if symbol_table_fileoff == 0 || number_of_symbols == 0 || string_table_fileoff == 0 {
+        return None;
+    }
+
+    let symbol_table_vmaddr = fileoff_to_vmaddr(&map_fileoff_to_vmaddr, symbol_table_fileoff as u64);
+
+    let string_table_vmaddr = fileoff_to_vmaddr(&map_fileoff_to_vmaddr, string_table_fileoff as u64);
+
+    // TODO: figure out what this means:
+    // https://www.reddit.com/r/jailbreakdevelopers/comments/ol9m1s/confusion_about_macho_offsets_and_addresses/
+
+    Some((0..number_of_symbols).filter_map(move |j| {
+        let symbol_name_offset: u32 = process.read(page + symbol_table_vmaddr + (j * macho_offsets.size_of_nlist_item)).ok()?;
+        let string_address = page + string_table_vmaddr + symbol_name_offset;
+        let symbol_fileoff = process.read(page + symbol_table_vmaddr + (j * macho_offsets.size_of_nlist_item) + macho_offsets.nlist_value).ok()?;
+        let symbol_vmaddr = fileoff_to_vmaddr(&map_fileoff_to_vmaddr, symbol_fileoff);
+        let symbol_address = page + symbol_vmaddr;
+        Some(Symbol {
+            address: symbol_address,
+            name_addr: string_address,
+        })
+    })
+    .fuse())
+}
+
+fn fileoff_to_vmaddr(map: &BTreeMap<u64, u64>, fileoff: u64) -> u64 {
+    map
+        .iter()
+        .filter(|(&k, _)| k <= fileoff)
+        .max_by_key(|(&k, _)| k) // can/should this max_by_key be replaced with last?
+        .map(|(&k, &v)| v + fileoff - k)
+        .unwrap_or(fileoff)
 }

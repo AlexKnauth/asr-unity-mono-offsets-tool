@@ -4,7 +4,7 @@ Attached to a new process: hollow_knight.x86_64
 binary format: ELF
 mono_name: libmono.so
 mono_path: /mnt/home/alex/games/hollowknight/versions/1432/Hollow Knight/hollow_knight_Data/Mono/x86_64/libmono.so
-deref_type: Bit64
+pointer_size: Bit64
 version: V1
 i: 0, sh_type: 0
 i: 1, sh_type: 7

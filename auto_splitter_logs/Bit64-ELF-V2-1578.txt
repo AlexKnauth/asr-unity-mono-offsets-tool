@@ -5,7 +5,7 @@ Attached to a new process: hollow_knight.x86_64
 binary format: ELF
 mono_name: libmonobdwgc-2.0.so
 mono_path: /mnt/home/alex/.local/share/Steam/steamapps/common/Hollow Knight/hollow_knight_Data/MonoBleedingEdge/x86_64/libmonobdwgc-2.0.so
-deref_type: Bit64
+pointer_size: Bit64
 version: V2
 i: 0, sh_type: 0
 i: 1, sh_type: 7
