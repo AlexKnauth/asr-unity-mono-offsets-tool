@@ -22,8 +22,9 @@ asr::async_main!(stable);
 
 const CSTR: usize = 128;
 
-const PROCESS_NAMES: [&str; 8] = [
+const PROCESS_NAMES: [&str; 9] = [
     "Clone Hero",
+    "Clone Hero.exe",
     "Hollow Knight",
     "hollow_knight",
     "hollow_knight.exe",
@@ -46,6 +47,13 @@ const UNITY_PLAYER_NAMES: [&str; 3] = [
     "UnityPlayer.dll",
     "UnityPlayer.so",
     "UnityPlayer.dylib",
+];
+
+static EXCLUDE_IMAGE_SCORE: [&str; 4] = [
+    "Byte",
+    "UInt16",
+    "Int32",
+    "UInt32",
 ];
 
 static EXCLUDE_PARENT_SCORE: [&str; 33] = [
@@ -363,30 +371,43 @@ async fn option_main(process: &Process, name: &str) -> Option<()> {
     let monoclassdef_klass = 0x0;
     asr::print_message(&format!("Offsets monoclassdef_klass: 0x{:X?}, ASSUMED", monoclassdef_klass));
 
-    let monoclass_image = [0x28, 0x2C, 0x30, 0x38, 0x40].into_iter().max_by_key(|&monoclass_image| {
+    let (monoclass_image, monoclass_name, monoclass_name_space) = [(0x28, 0x2C, 0x30), (0x2C, 0x30, 0x34), (0x30, 0x34, 0x38), (0x30, 0x38, 0x40), (0x30, 0x40, 0x48), (0x40, 0x48, 0x50)].into_iter().max_by_key(|&(monoclass_image, monoclass_name, monoclass_name_space)| {
         let image_score: i32 = classes_no_next.iter().map(|&c| {
-            monoclass_image_score(process, pointer_size, c, monoclassdef_klass, monoclass_image, default_image)
+            let c_image_score = monoclass_image_score(process, pointer_size, c, monoclassdef_klass, monoclass_image, default_image);
+            let n = class_name(process, pointer_size, c, monoclassdef_klass, monoclass_name);
+            if c_image_score == 2 && n.is_some_and(|n| EXCLUDE_IMAGE_SCORE.contains(&n.as_str())) {
+                3
+            } else {
+                c_image_score
+            }
+        }).sum();
+        let class_name_score: i32 = classes_no_next.iter().map(|&c| {
+            monoclass_name_score(process, pointer_size, c, monoclassdef_klass, monoclass_name, monoclass_name_space)
         }).sum();
         // asr::print_message(&format!("monoclass_image: 0x{:X?}, image_score: {}", monoclass_image, image_score));
-        image_score
+        // asr::print_message(&format!("monoclass_name: 0x{:X?} space: 0x{:X?}, class_name_score: {}", monoclass_name, monoclass_name_space, class_name_score));
+        image_score + class_name_score
     })?;
     let image_score: i32 = classes_no_next.iter().map(|&c| {
-        monoclass_image_score(process, pointer_size, c, monoclassdef_klass, monoclass_image, default_image)
+        let c_image_score = monoclass_image_score(process, pointer_size, c, monoclassdef_klass, monoclass_image, default_image);
+        let n = class_name(process, pointer_size, c, monoclassdef_klass, monoclass_name);
+        if c_image_score == 2 && n.is_some_and(|n| EXCLUDE_IMAGE_SCORE.contains(&n.as_str())) {
+            3
+        } else {
+            c_image_score
+        }
     }).sum();
     asr::print_message(&format!("Offsets monoclass_image: 0x{:X?}, image_score: {} / {}", monoclass_image, image_score, 3 * classes_no_next.len()));
     if image_score < 3 * classes_no_next.len() as i32 {
         asr::print_message("BAD: image_score is not at maximum");
     }
-
-    let (monoclass_name, monoclass_name_space) = [(0x2C, 0x30), (0x30, 0x34), (0x34, 0x38), (0x38, 0x40), (0x40, 0x48), (0x48, 0x50)].into_iter().max_by_key(|&(monoclass_name, monoclass_name_space)| {
-        let class_name_score: i32 = classes_no_next.iter().map(|&c| {
-            monoclass_name_score(process, pointer_size, c, monoclassdef_klass, monoclass_name, monoclass_name_space)
-        }).sum();
-        // asr::print_message(&format!("monoclass_name: 0x{:X?} space: 0x{:X?}, class_name_score: {}", monoclass_name, monoclass_name_space, class_name_score));
-        class_name_score
-    })?;
     let class_name_score: i32 = classes_no_next.iter().map(|&c| {
-        monoclass_name_score(process, pointer_size, c, monoclassdef_klass, monoclass_name, monoclass_name_space)
+        let c_name_score = monoclass_name_score(process, pointer_size, c, monoclassdef_klass, monoclass_name, monoclass_name_space);
+        let n = class_name(process, pointer_size, c, monoclassdef_klass, monoclass_name);
+        if c_name_score < 10 {
+            asr::print_message(&format!("c_name_score: {}, n: {:?}", c_name_score, n));
+        }
+        c_name_score
     }).sum();
     asr::print_message(&format!("Offsets monoclass_name: 0x{:X?}, space: 0x{:X?}, class_name_score: {} / {}", monoclass_name, monoclass_name_space, class_name_score, 10 * classes_no_next.len()));
     if class_name_score < 10 * classes_no_next.len() as i32 {
@@ -827,8 +848,11 @@ fn monoclass_name_score(
         // asr::print_message(&format!("class space_cstr not utf8: {:X?}", space_cstr.as_bytes()));
         return 5;
     };
-    if !name_str.chars().all(|c| c.is_ascii_graphic()) { return 6; }
-    if !space_str.chars().all(|c| c.is_ascii_graphic()) { return 7; }
+    if !name_str.chars().all(|c| !c.is_ascii() || c.is_ascii_graphic()) {
+        // asr::print_message(&format!("class name_str not ascii graphic: {:X?}", name_cstr.as_bytes()));
+        return 6;
+    }
+    if !space_str.chars().all(|c| !c.is_ascii() || c.is_ascii_graphic()) { return 7; }
     if name_str.is_empty() { return 8; }
     if space_str.is_empty() {
         // asr::print_message(&format!("space empty for {}", name_str));
