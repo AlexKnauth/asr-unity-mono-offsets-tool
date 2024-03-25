@@ -93,9 +93,9 @@ static EXCLUDE_PARENT_SCORE: [&str; 33] = [
 ];
 
 // expect class_int32 to have 3 fields
-const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 6] = [
+const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 5] = [
     ("Byte", (3, 25)),
-    ("Guid", (15, 8)),
+    // ("Guid", (15, 8)),
     ("Int32", (3, 25)),
     ("SByte", (3, 25)),
     ("UInt32", (3, 25)),
