@@ -647,7 +647,7 @@ async fn static_table_offsets_v2_v3(
         v2_v3_monoclass_vtable_size_score(process, monoclassdef_klass, monoclass_vtable_size, c, n)
     }).sum();
     if vtable_size_score < 5 * map_name_class_field_counts.len() as i32 {
-        asr::print_message("BAD: vtable_size_score is not at maximum");
+        asr::print_message(&format!("BAD: vtable_size_score is not at maximum {} / {}", vtable_size_score, 5 * map_name_class_field_counts.len()));
     }
 
     /*
