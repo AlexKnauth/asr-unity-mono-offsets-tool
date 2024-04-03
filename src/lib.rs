@@ -93,13 +93,13 @@ static EXCLUDE_PARENT_SCORE: [&str; 33] = [
 ];
 
 // expect class_int32 to have 3 fields
-const NAME_FIELD_COUNTS: [(&str, (u32, u32)); 5] = [
-    ("Byte", (3, 25)),
-    // ("Guid", (15, 8)),
-    ("Int32", (3, 25)),
-    ("SByte", (3, 25)),
-    ("UInt32", (3, 25)),
-    ("UnSafeCharBuffer", (3, 4)),
+const NAME_FIELD_COUNTS: [(&str, (u32, &[u32])); 5] = [
+    ("Byte", (3, &[25, 26])),
+    // ("Guid", (15, &[8, 9])),
+    ("Int32", (3, &[25, 26])),
+    ("SByte", (3, &[25, 26])),
+    ("UInt32", (3, &[25, 26])),
+    ("UnSafeCharBuffer", (3, &[4])),
 ];
 
 const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 9] = [
@@ -441,8 +441,8 @@ async fn option_main(process: &Process, name: &str) -> Option<()> {
 
     let map_name_class = classes_map(process, pointer_size, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name);
 
-    let map_name_field_counts: BTreeMap<&str, (u32, u32)> = BTreeMap::from(NAME_FIELD_COUNTS);
-    let mut map_name_class_field_counts: BTreeMap<&str, (Address, u32, u32)> = BTreeMap::new();
+    let map_name_field_counts: BTreeMap<&str, (u32, &[u32])> = BTreeMap::from(NAME_FIELD_COUNTS);
+    let mut map_name_class_field_counts: BTreeMap<&str, (Address, u32, &[u32])> = BTreeMap::new();
     for (name, &class) in map_name_class.iter() {
         if let Some((&k, &(v1, v2))) = map_name_field_counts.get_key_value(name.as_str()) {
             map_name_class_field_counts.insert(k, (class, v1, v2));
@@ -624,7 +624,7 @@ async fn static_table_offsets_v2_v3(
     pointer_size: PointerSize,
     version: mono::Version,
     map_name_class: BTreeMap<String, Address>,
-    map_name_class_field_counts: BTreeMap<&str, (Address, u32, u32)>,
+    map_name_class_field_counts: BTreeMap<&str, (Address, u32, &[u32])>,
     monoclassdef_klass: i32,
     monoclassdef_field_count: i32,
     monoclass_fields: i32,
@@ -643,8 +643,14 @@ async fn static_table_offsets_v2_v3(
         vtable_size_score
     })?;
     asr::print_message(&format!("{:?} Offsets monoclass_vtable_size (TypeDefinitionVTableSize): 0x{:X}", version, monoclass_vtable_size));
-    let vtable_size_score: i32 = map_name_class_field_counts.values().map(|&(c, _, n)| {
-        v2_v3_monoclass_vtable_size_score(process, monoclassdef_klass, monoclass_vtable_size, c, n)
+    let vtable_size_score: i32 = map_name_class_field_counts.iter().map(|(&name, &(c, _, n))| {
+        let vtable_size_score = v2_v3_monoclass_vtable_size_score(process, monoclassdef_klass, monoclass_vtable_size, c, n);
+        // asr::print_message(&format!("{:?} monoclass_vtable_size (TypeDefinitionVTableSize): 0x{:X}, vtable_size_score: {} / 5", version, monoclass_vtable_size, vtable_size_score));
+        if vtable_size_score < 5 {
+            let s = class_vtable_size(process, monoclassdef_klass, monoclass_vtable_size, c);
+            asr::print_message(&format!("name: {:?}, n: {:?}, s: {:?}", name, n, s));
+        }
+        vtable_size_score
     }).sum();
     if vtable_size_score < 5 * map_name_class_field_counts.len() as i32 {
         asr::print_message(&format!("BAD: vtable_size_score is not at maximum {} / {}", vtable_size_score, 5 * map_name_class_field_counts.len()));
@@ -1004,16 +1010,25 @@ fn v2_v3_monoclass_vtable_size_score(
     monoclassdef_klass: i32,
     monoclass_vtable_size: i32,
     c: Address,
-    n: u32,
+    n: &[u32],
 ) -> i32 {
-    let Ok(vtable_size) = process.read::<u32>(c + monoclassdef_klass + monoclass_vtable_size) else {
+    let Ok(vtable_size) = class_vtable_size(process, monoclassdef_klass, monoclass_vtable_size, c) else {
         return 0;
     };
     if vtable_size == 0 { return 1; }
     if vtable_size == 434 { return 2; }
     if 0x100 <= vtable_size { return 3; }
-    if vtable_size != n { return 4; }
+    if !n.contains(&vtable_size) { return 4; }
     5
+}
+
+fn class_vtable_size(
+    process: &Process,
+    monoclassdef_klass: i32,
+    monoclass_vtable_size: i32,
+    c: Address,
+) -> Result<u32, asr::Error> {
+    process.read::<u32>(c + monoclassdef_klass + monoclass_vtable_size)
 }
 
 fn v2_v3_monovtable_vtable_score(
