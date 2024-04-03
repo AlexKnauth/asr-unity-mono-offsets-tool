@@ -93,13 +93,13 @@ static EXCLUDE_PARENT_SCORE: [&str; 33] = [
 ];
 
 // expect class_int32 to have 3 fields
-const NAME_FIELD_COUNTS: [(&str, (u32, &[u32])); 5] = [
-    ("Byte", (3, &[25, 26])),
-    // ("Guid", (15, &[8, 9])),
-    ("Int32", (3, &[25, 26])),
-    ("SByte", (3, &[25, 26])),
-    ("UInt32", (3, &[25, 26])),
-    ("UnSafeCharBuffer", (3, &[4])),
+const NAME_FIELD_COUNTS: [(&str, (&[u32], &[u32])); 6] = [
+    ("Byte", (&[3], &[25, 26])),
+    ("Guid", (&[12, 15], &[8, 9])),
+    ("Int32", (&[3], &[25, 26])),
+    ("SByte", (&[3], &[25, 26])),
+    ("UInt32", (&[3], &[25, 26])),
+    ("UnSafeCharBuffer", (&[3], &[4])),
 ];
 
 const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 9] = [
@@ -441,8 +441,8 @@ async fn option_main(process: &Process, name: &str) -> Option<()> {
 
     let map_name_class = classes_map(process, pointer_size, mscorlib_table_addr, mscorlib_class_cache_size, monoclassdef_klass, monoclassdef_next_class_cache, monoclass_name);
 
-    let map_name_field_counts: BTreeMap<&str, (u32, &[u32])> = BTreeMap::from(NAME_FIELD_COUNTS);
-    let mut map_name_class_field_counts: BTreeMap<&str, (Address, u32, &[u32])> = BTreeMap::new();
+    let map_name_field_counts: BTreeMap<&str, (&[u32], &[u32])> = BTreeMap::from(NAME_FIELD_COUNTS);
+    let mut map_name_class_field_counts: BTreeMap<&str, (Address, &[u32], &[u32])> = BTreeMap::new();
     for (name, &class) in map_name_class.iter() {
         if let Some((&k, &(v1, v2))) = map_name_field_counts.get_key_value(name.as_str()) {
             map_name_class_field_counts.insert(k, (class, v1, v2));
@@ -458,8 +458,13 @@ async fn option_main(process: &Process, name: &str) -> Option<()> {
         // asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {}", monoclassdef_field_count, field_count_score));
         field_count_score
     })?;
-    let field_count_score: i32 = map_name_class_field_counts.values().map(|&(c, n, _)| {
-        monoclassdef_field_count_score(process, pointer_size, c, n, monoclassdef_field_count, monoclassdef_next_class_cache)
+    let field_count_score: i32 = map_name_class_field_counts.iter().map(|(&name, &(c, n, _))| {
+        let field_count_score = monoclassdef_field_count_score(process, pointer_size, c, n, monoclassdef_field_count, monoclassdef_next_class_cache);
+        // asr::print_message(&format!("monoclassdef_field_count: 0x{:X?}, field_count_score: {} / 4", monoclassdef_field_count, field_count_score));
+        if field_count_score < 4 {
+            asr::print_message(&format!("name: {}, n: {:?}, count: {:?}", name, n, class_field_count(process, monoclassdef_field_count, c)));
+        }
+        field_count_score
     }).sum();
     asr::print_message(&format!("Offsets monoclassdef_field_count: 0x{:X?}, field_count_score: {} / {}", monoclassdef_field_count, field_count_score, 4 * map_name_class_field_counts.len()));
     if field_count_score < 4 * map_name_class_field_counts.len() as i32 {
@@ -495,14 +500,14 @@ async fn option_main(process: &Process, name: &str) -> Option<()> {
 
     let monoclass_fields = [0x60, 0x74, 0x78, 0x90, 0x98, 0xA0, 0xA8].into_iter().max_by_key(|&monoclass_fields| {
         let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1, _)| {
-            let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1);
+            let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1.iter().max().unwrap().clone());
             monoclass_fields_score(process, pointer_size, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
         }).sum();
         // asr::print_message(&format!("monoclass_fields: 0x{:X?}, fields_score: {}", monoclass_fields, fields_score));
         fields_score
     })?;
     let fields_score: i32 = map_name_class_field_counts.values().map(|&(c, n1, _)| {
-        let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1);
+        let n2 = process.read::<u32>(c + monoclassdef_field_count).unwrap_or(n1.iter().max().unwrap().clone());
         monoclass_fields_score(process, pointer_size, c, n2, monoclassdef_klass, monoclass_fields, monoclassfieldalignment, monoclassfield_name)
     }).sum();
     asr::print_message(&format!("Offsets monoclass_fields: 0x{:X?}, fields_score: {} / {}", monoclass_fields, fields_score, 5 * map_name_class_field_counts.len()));
@@ -624,7 +629,7 @@ async fn static_table_offsets_v2_v3(
     pointer_size: PointerSize,
     version: mono::Version,
     map_name_class: BTreeMap<String, Address>,
-    map_name_class_field_counts: BTreeMap<&str, (Address, u32, &[u32])>,
+    map_name_class_field_counts: BTreeMap<&str, (Address, &[u32], &[u32])>,
     monoclassdef_klass: i32,
     monoclassdef_field_count: i32,
     monoclass_fields: i32,
@@ -919,19 +924,27 @@ fn monoclassdef_next_class_cache_score(
 fn monoclassdef_field_count_score(
     process: &Process,
     _pointer_size: PointerSize,
-    class: Address,
-    expected: u32,
+    c: Address,
+    expected: &[u32],
     monoclassdef_field_count: i32,
     monoclassdef_next_class_cache: i32,
 ) -> i32 {
     if monoclassdef_next_class_cache <= monoclassdef_field_count { return 0; }
-    let Ok(field_count) = process.read::<u32>(class + monoclassdef_field_count) else {
+    let Ok(field_count) = class_field_count(process, monoclassdef_field_count, c) else {
         return 1;
     };
     if 0x100 <= field_count { return 2; }
-    if field_count != expected { return 3; }
+    if !expected.contains(&field_count) { return 3; }
     // TODO: a better way of telling when something isn't the correct field count
     4
+}
+
+fn class_field_count(
+    process: &Process,
+    monoclassdef_field_count: i32,
+    c: Address,
+) -> Result<u32, asr::Error> {
+    process.read::<u32>(c + monoclassdef_field_count)
 }
 
 fn monoclass_fields_score(
