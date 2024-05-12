@@ -155,14 +155,7 @@ pub fn get_function_address(process: &Process, range: (Address, u64), macho_byte
     // asr::print_message("macho get_function_address: before get_function_offset");
     let function_offset: u32 = get_function_offset(&macho_bytes2, function_name)?;
     // asr::print_message(&format!("macho get_function_address: function_offset: 0x{:X?}", function_offset));
-    // NOTE: function_address_via_page is probably NOT the right address
-    let function_address_via_page = page + function_offset;
-    // asr::print_message(&format!("macho get_function_address: function_address_via_page: {}", function_address_via_page));
-    let bytes_via_page: [u8; 0x100] = process.read(function_address_via_page).ok()?;
     let bytes_expected: [u8; 0x100] = slice_read(&macho_bytes2, function_offset).ok()?;
-    if bytes_via_page != bytes_expected {
-        // asr::print_message("BAD: bytes_via_page != bytes_expected");
-    }
     let signature: Signature<0x100> = Signature::Simple(bytes_expected);
     let function_address_expected = signature.scan_process_range(process, range)?;
     // asr::print_message(&format!("macho get_function_address: function_address_expected: {}", function_address_expected));
