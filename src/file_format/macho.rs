@@ -236,8 +236,12 @@ impl SymbolsState {
 
 
 pub fn get_function_symbol_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
-    let ma = get_function_address(process, range, macho_bytes, function_name);
     let page = scan_macho_page(process, range)?;
+    let header: [u8; HEADER_SIZE] = process.read(page).ok()?;
+    let header_offset = memchr::memmem::find(macho_bytes, &header)?;
+    let macho_bytes2 = &macho_bytes[header_offset..];
+    let file = MachOFile{ bytes: &macho_bytes2 };
+    let ma = get_function_address(process, range, &file, function_name);
     let memory = MachOMemory { process, page };
     let mb = symbols(&memory).and_then(|mut ss| ss.find_map(|s| -> Option<Address> {
         let n = s.get_name::<MachOMemory, CSTR>(&memory)?;
@@ -272,17 +276,11 @@ pub fn get_function_symbol_address(process: &Process, range: (Address, u64), mac
 }
 
 /// Finds the address of a function from a MachO module range and file contents.
-pub fn get_function_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
-    // asr::print_message("macho get_function_address: before scan_macho_page");
-    // NOTE: this page address is probably ONLY good for the header, NOT the function address
-    let page = scan_macho_page(process, range)?;
-    let header: [u8; HEADER_SIZE] = process.read(page).ok()?;
-    let header_offset = memchr::memmem::find(macho_bytes, &header)?;
-    let macho_bytes2 = &macho_bytes[header_offset..];
+fn get_function_address<'a>(process: &Process, range: (Address, u64), m: &MachOFile<'a>, function_name: &[u8]) -> Option<Address> {
     // asr::print_message("macho get_function_address: before get_function_offset");
-    let function_offset: u32 = get_function_offset(MachOFile{ bytes: &macho_bytes2 }, function_name)?;
+    let function_offset: u32 = get_function_offset(m, function_name)?;
     // asr::print_message(&format!("macho get_function_address: function_offset: 0x{:X?}", function_offset));
-    let bytes_expected: [u8; 0x100] = slice_read(&macho_bytes2, function_offset).ok()?;
+    let bytes_expected: [u8; 0x100] = slice_read(&m.bytes, function_offset).ok()?;
     let signature: Signature<0x100> = Signature::Simple(bytes_expected);
     let function_address_expected = signature.scan_process_range(process, range)?;
     // asr::print_message(&format!("macho get_function_address: function_address_expected: {}", function_address_expected));
@@ -290,7 +288,7 @@ pub fn get_function_address(process: &Process, range: (Address, u64), macho_byte
 }
 
 /// Finds the offset of a function in the bytes of a MachO file.
-fn get_function_offset<M: MachOView>(macho_bytes: M, function_name: &[u8]) -> Option<u32> {
+fn get_function_offset<M: MachOView>(macho_bytes: &M, function_name: &[u8]) -> Option<u32> {
     let mut s = SymbolsState::new();
     s.number_of_commands = macho_bytes.read("number_of_commands", s.offsets.number_of_commands, s.offsets.number_of_commands)?;
     let function_name_len = function_name.len();
