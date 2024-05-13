@@ -64,19 +64,23 @@ impl MachOFormatOffsets {
 
 /// A symbol exported into the current module.
 pub struct Symbol {
-    /// The address associated with the current function
-    pub address: Address,
-    /// The address storing the name of the current function
-    name_addr: Address,
+    /// The address associated with the current function, fileoff
+    pub address_fileoff: u64,
+    /// The address associated with the current function, vmaddr
+    pub address_vmaddr: u64,
+    /// The address storing the name of the current function, fileoff
+    name_fileoff: u64,
+    /// The address storing the name of the current function, vmaddr
+    name_vmaddr: u64,
 }
 
 impl Symbol {
     /// Tries to retrieve the name of the current function
-    pub fn get_name<const CAP: usize>(
+    fn get_name<M: MachOView, const CAP: usize>(
         &self,
-        process: &Process,
-    ) -> Result<ArrayCString<CAP>, asr::Error> {
-        process.read(self.name_addr)
+        m: &M,
+    ) -> Option<ArrayCString<CAP>> {
+        m.read("name", self.name_fileoff, self.name_vmaddr)
     }
 }
 
@@ -233,10 +237,12 @@ impl SymbolsState {
 
 pub fn get_function_symbol_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
     let ma = get_function_address(process, range, macho_bytes, function_name);
-    let mb = symbols(process, range).and_then(|mut ss| ss.find_map(|s| -> Option<Address> {
-        let n = s.get_name::<CSTR>(process).ok()?;
+    let page = scan_macho_page(process, range)?;
+    let memory = MachOMemory { process, page };
+    let mb = symbols(&memory).and_then(|mut ss| ss.find_map(|s| -> Option<Address> {
+        let n = s.get_name::<MachOMemory, CSTR>(&memory)?;
         if n.matches(function_name) {
-            Some(s.address)
+            Some(page + s.address_vmaddr)
         } else {
             None
         }
@@ -329,12 +335,7 @@ pub fn slice_read<T: bytemuck::CheckedBitPattern, N: Into<u64>>(slice: &[u8], ad
     bytemuck::checked::try_from_bytes(slice_src).cloned()
 }
 
-pub fn symbols(
-    process: &Process,
-    range: (Address, u64),
-) -> Option<impl FusedIterator<Item = Symbol> + '_> {
-    let page = scan_macho_page(process, range)?;
-    let m = MachOMemory { process, page };
+fn symbols<M: MachOView>(m: &M) -> Option<impl FusedIterator<Item = Symbol> + '_> {
     let mut s = SymbolsState::new();
     s.number_of_commands = m.read("number_of_commands", s.offsets.number_of_commands, s.offsets.number_of_commands)?;
 
@@ -378,17 +379,17 @@ pub fn symbols(
             (s.symbol_table_fileoff + (j * s.offsets.size_of_nlist_item)) as u64,
             s.symbol_table_vmaddr + (j * s.offsets.size_of_nlist_item) as u64,
         )?;
-        let string_address = page + s.string_table_vmaddr + symbol_name_offset;
         let symbol_fileoff = m.read(
             "symbol_fileoff",
             (s.symbol_table_fileoff + (j * s.offsets.size_of_nlist_item) + s.offsets.nlist_value) as u64,
             s.symbol_table_vmaddr + ((j * s.offsets.size_of_nlist_item) + s.offsets.nlist_value) as u64,
         )?;
         let symbol_vmaddr = fileoff_to_vmaddr(&s.map_fileoff_to_vmaddr, symbol_fileoff);
-        let symbol_address = page + symbol_vmaddr;
         Some(Symbol {
-            address: symbol_address,
-            name_addr: string_address,
+            address_fileoff: symbol_fileoff,
+            address_vmaddr: symbol_vmaddr,
+            name_fileoff: (s.string_table_fileoff + symbol_name_offset) as u64,
+            name_vmaddr: s.string_table_vmaddr + symbol_name_offset as u64,
         })
     })
     .fuse())
