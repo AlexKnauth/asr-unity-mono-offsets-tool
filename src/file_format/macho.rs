@@ -134,6 +134,7 @@ struct MachOFile<'a> {
 
 struct MachOMemory<'a> {
     process: &'a Process,
+    range: (Address, u64),
     page: Address,
 }
 
@@ -177,7 +178,16 @@ impl<'a> MachOFileMemory<'a> {
                 if a == b {
                     Some(a)
                 } else {
-                    asr::print_message(&format!("{} mismatch: file {:?} vs memory {:?}", desc, a, b));
+                    asr::print_message(
+                        &format!(
+                            "{} mismatch:\n{}{:?}\n{}{:?}",
+                            desc,
+                            "  file:   ",
+                            a,
+                            "  memory: ",
+                            b,
+                        ),
+                    );
                     Some(a)
                 }
             }
@@ -204,6 +214,15 @@ impl<'a> MachOView for MachOFileMemory<'a> {
         let vmaddr: u64 = vmaddr.into();
         let ma = self.file.read_bytes(desc, fileoff, vmaddr, len);
         let mb = self.memory.read_bytes(desc, fileoff, vmaddr, len);
+        if 100 <= len && ma.is_some() && ma != mb {
+            let bytes_expected: [u8; 10] = slice_read(ma.as_ref()?, 0u64).ok()?;
+            let signature: Signature<10> = Signature::Simple(bytes_expected);
+            if let Some(address_expected) = signature.scan_process_range(self.memory.process, self.memory.range) {
+                asr::print_message(&format!("address_expected found: {}", address_expected));
+            } else {
+                asr::print_message("BAD BAD BAD 10: address_expected not found.");
+            }
+        }
         self.compare_choose(desc, ma, mb)
     }
 }
@@ -242,9 +261,10 @@ pub fn get_function_symbol_address(process: &Process, range: (Address, u64), mac
     let macho_bytes2 = &macho_bytes[header_offset..];
     let file = MachOFile{ bytes: &macho_bytes2 };
     let ma = get_function_address(process, range, &file, function_name);
-    let memory = MachOMemory { process, page };
-    let mb = symbols(&memory).and_then(|mut ss| ss.find_map(|s| -> Option<Address> {
-        let n = s.get_name::<MachOMemory, CSTR>(&memory)?;
+    let memory = MachOMemory { process, range, page };
+    let file_memory = MachOFileMemory { file, memory };
+    let mb = symbols(&file_memory).and_then(|mut ss| ss.find_map(|s| -> Option<Address> {
+        let n = s.get_name::<MachOFileMemory, CSTR>(&file_memory)?;
         if n.matches(function_name) {
             Some(page + s.address_vmaddr)
         } else {
@@ -307,7 +327,7 @@ fn get_function_offset<M: MachOView>(macho_bytes: &M, function_name: &[u8]) -> O
 
             for j in 0..s.number_of_symbols {
                 let symbol_table_j = s.symbol_table_fileoff + (j * s.offsets.size_of_nlist_item);
-                let symbol_name_offset: u32 = macho_bytes.read("symbol_name_offset", symbol_table_j, symbol_table_j)?;
+                let symbol_name_offset: u32 = macho_bytes.read("gfo symbol_name_offset", symbol_table_j, symbol_table_j)?;
                 let string_offset = s.string_table_fileoff + symbol_name_offset;
                 let symbol_name: Vec<u8> = macho_bytes.read_bytes("symbol_name", string_offset, string_offset, function_name_len + 1)?;
 
@@ -368,12 +388,15 @@ fn symbols<M: MachOView>(m: &M) -> Option<impl FusedIterator<Item = Symbol> + '_
 
     s.string_table_vmaddr = fileoff_to_vmaddr(&s.map_fileoff_to_vmaddr, s.string_table_fileoff as u64);
 
+    m.read_bytes("symbol_table", s.symbol_table_fileoff as u64, s.symbol_table_vmaddr, 104);
+    m.read_bytes("string_table", s.string_table_fileoff as u64, s.string_table_vmaddr, 104);
+
     // TODO: figure out what this means:
     // https://www.reddit.com/r/jailbreakdevelopers/comments/ol9m1s/confusion_about_macho_offsets_and_addresses/
 
     Some((0..s.number_of_symbols).filter_map(move |j| {
         let symbol_name_offset: u32 = m.read(
-            "symbol_name_offset",
+            "s symbol_name_offset",
             (s.symbol_table_fileoff + (j * s.offsets.size_of_nlist_item)) as u64,
             s.symbol_table_vmaddr + (j * s.offsets.size_of_nlist_item) as u64,
         )?;
