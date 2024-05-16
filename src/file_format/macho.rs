@@ -261,10 +261,12 @@ pub fn get_function_symbol_address(process: &Process, range: (Address, u64), mac
     let macho_bytes2 = &macho_bytes[header_offset..];
     let file = MachOFile{ bytes: &macho_bytes2 };
     let ma = get_function_address(process, range, &file, function_name);
+    if ma.is_some() {
+        return ma;
+    }
     let memory = MachOMemory { process, range, page };
-    let file_memory = MachOFileMemory { file, memory };
-    let mb = symbols(&file_memory).and_then(|mut ss| ss.find_map(|s| -> Option<Address> {
-        let n = s.get_name::<MachOFileMemory, CSTR>(&file_memory)?;
+    let mb = symbols(&memory).and_then(|mut ss| ss.find_map(|s| -> Option<Address> {
+        let n = s.get_name::<MachOMemory, CSTR>(&memory)?;
         if n.matches(function_name) {
             Some(page + s.address_vmaddr)
         } else {
@@ -300,8 +302,8 @@ fn get_function_address<'a>(process: &Process, range: (Address, u64), m: &MachOF
     // asr::print_message("macho get_function_address: before get_function_offset");
     let function_offset: u32 = get_function_offset(m, function_name)?;
     // asr::print_message(&format!("macho get_function_address: function_offset: 0x{:X?}", function_offset));
-    let bytes_expected: [u8; 0x100] = slice_read(&m.bytes, function_offset).ok()?;
-    let signature: Signature<0x100> = Signature::Simple(bytes_expected);
+    let bytes_expected: [u8; 20] = slice_read(&m.bytes, function_offset).ok()?;
+    let signature: Signature<20> = Signature::Simple(bytes_expected);
     let function_address_expected = signature.scan_process_range(process, range)?;
     // asr::print_message(&format!("macho get_function_address: function_address_expected: {}", function_address_expected));
     Some(function_address_expected)
