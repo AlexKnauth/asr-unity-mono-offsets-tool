@@ -290,7 +290,7 @@ async fn option_main(process: &Process, name: &str) -> Option<()> {
     next_tick().await;
 
     let first_assembly_data = read_pointer(process, pointer_size, assemblies).ok()?;
-    // asr::print_message(&format!("first_assembly_data: {}", first_assembly_data));
+    asr::print_message(&format!("first_assembly_data: {}", first_assembly_data));
 
     let monoassembly_aname = [0x8, 0x10].into_iter().max_by_key(|&monoassembly_aname| {
         address_aname_score(process, pointer_size, first_assembly_data + monoassembly_aname)
@@ -307,9 +307,11 @@ async fn option_main(process: &Process, name: &str) -> Option<()> {
     next_tick().await;
 
     let default_assembly = assemblies_iter(process, pointer_size, assemblies).find(|&assembly| {
-        monoassembly_aname_string(process, pointer_size, assembly, monoassembly_aname).as_deref() == Some("Assembly-CSharp")
+        let n = monoassembly_aname_string(process, pointer_size, assembly, monoassembly_aname);
+        asr::print_message(&format!("n: {:?}", n));
+        n.as_deref() == Some("Assembly-CSharp")
     })?;
-    // asr::print_message(&format!("default_assembly: {}", default_assembly));
+    asr::print_message(&format!("default_assembly: {}", default_assembly));
 
     let monoassembly_image = [0x40, 0x44, 0x48, 0x58, 0x60].into_iter().max_by_key(|&monoassembly_image| {
         address_image_score(process, pointer_size, default_assembly + monoassembly_image)
