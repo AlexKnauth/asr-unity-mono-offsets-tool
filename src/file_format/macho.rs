@@ -2,12 +2,8 @@
 
 use asr::{signature::Signature, string::ArrayCString, Address, PointerSize, Process};
 
-use core::{
-    fmt::Debug,
-    iter::FusedIterator,
-    mem,
-};
 use alloc::collections::BTreeMap;
+use core::{fmt::Debug, iter::FusedIterator, mem};
 
 const CSTR: usize = 128;
 
@@ -94,7 +90,7 @@ pub fn scan_macho_page(process: &Process, range: (Address, u64)) -> Option<Addre
             Ok(MH_MAGIC_64 | MH_CIGAM_64 | MH_MAGIC_32 | MH_CIGAM_32) => {
                 return Some(a);
             }
-            _ => ()
+            _ => (),
         }
     }
     None
@@ -106,10 +102,9 @@ pub fn detect_pointer_size(process: &Process, module_range: (Address, u64)) -> O
     match magic {
         MH_MAGIC_64 | MH_CIGAM_64 => Some(PointerSize::Bit64),
         MH_MAGIC_32 | MH_CIGAM_32 => Some(PointerSize::Bit32),
-        _ => None
+        _ => None,
     }
 }
-
 
 trait MachOView {
     fn read<T: bytemuck::CheckedBitPattern + Debug + PartialEq, N: Into<u64>>(
@@ -119,7 +114,13 @@ trait MachOView {
         vmaddr: N,
     ) -> Option<T>;
 
-    fn read_bytes<N: Into<u64>>(&self, desc: &str, fileoff: N, vmaddr: N, len: usize) -> Option<Vec<u8>>;
+    fn read_bytes<N: Into<u64>>(
+        &self,
+        desc: &str,
+        fileoff: N,
+        vmaddr: N,
+        len: usize,
+    ) -> Option<Vec<u8>>;
 }
 
 struct MachOFile<'a> {
@@ -139,7 +140,12 @@ struct MachOFileMemory<'a> {
 }
 
 impl<'a> MachOView for MachOFile<'a> {
-    fn read<T: bytemuck::CheckedBitPattern, N: Into<u64>>(&self, _: &str, fileoff: N, _: N) -> Option<T> {
+    fn read<T: bytemuck::CheckedBitPattern, N: Into<u64>>(
+        &self,
+        _: &str,
+        fileoff: N,
+        _: N,
+    ) -> Option<T> {
         slice_read(self.bytes, fileoff).ok()
     }
     fn read_bytes<N: Into<u64>>(&self, _: &str, fileoff: N, _: N, len: usize) -> Option<Vec<u8>> {
@@ -149,7 +155,12 @@ impl<'a> MachOView for MachOFile<'a> {
 }
 
 impl<'a> MachOView for MachOMemory<'a> {
-    fn read<T: bytemuck::CheckedBitPattern, N: Into<u64>>(&self, _: &str, _: N, vmaddr: N) -> Option<T> {
+    fn read<T: bytemuck::CheckedBitPattern, N: Into<u64>>(
+        &self,
+        _: &str,
+        _: N,
+        vmaddr: N,
+    ) -> Option<T> {
         self.process.read(self.page + vmaddr.into()).ok()
     }
     fn read_bytes<N: Into<u64>>(&self, _: &str, _: N, vmaddr: N, len: usize) -> Option<Vec<u8>> {
@@ -158,29 +169,42 @@ impl<'a> MachOView for MachOMemory<'a> {
 }
 
 impl<'a> MachOFileMemory<'a> {
-    fn compare_choose<T: Debug + PartialEq>(&self, desc: &str, ma: Option<T>, mb: Option<T>) -> Option<T> {
+    fn compare_choose<T: Debug + PartialEq>(
+        &self,
+        desc: &str,
+        ma: Option<T>,
+        mb: Option<T>,
+    ) -> Option<T> {
         match (ma, mb) {
             (None, None) => None,
             (Some(a), None) => {
-                asr::print_message(&format!("{}: only found in file, not in memory: {:?}", desc, a));
+                asr::print_message(&format!(
+                    "{}: only found in file, not in memory: {:?}",
+                    desc, a
+                ));
                 Some(a)
             }
             (None, Some(b)) => {
-                asr::print_message(&format!("{}: only found in memory, not in file: {:?}", desc, b));
+                asr::print_message(&format!(
+                    "{}: only found in memory, not in file: {:?}",
+                    desc, b
+                ));
                 Some(b)
             }
             (Some(a), Some(b)) => {
                 if a == b {
                     Some(a)
                 } else {
-                    asr::print_message(&format!("{} mismatch: file {:?} vs memory {:?}", desc, a, b));
+                    asr::print_message(&format!(
+                        "{} mismatch: file {:?} vs memory {:?}",
+                        desc, a, b
+                    ));
                     Some(a)
                 }
             }
         }
     }
 }
-
 
 impl<'a> MachOView for MachOFileMemory<'a> {
     fn read<T: bytemuck::CheckedBitPattern + Debug + PartialEq, N: Into<u64>>(
@@ -195,7 +219,13 @@ impl<'a> MachOView for MachOFileMemory<'a> {
         let mb = self.memory.read(desc, fileoff, vmaddr);
         self.compare_choose(desc, ma, mb)
     }
-    fn read_bytes<N: Into<u64>>(&self, desc: &str, fileoff: N, vmaddr: N, len: usize) -> Option<Vec<u8>> {
+    fn read_bytes<N: Into<u64>>(
+        &self,
+        desc: &str,
+        fileoff: N,
+        vmaddr: N,
+        len: usize,
+    ) -> Option<Vec<u8>> {
         let fileoff: u64 = fileoff.into();
         let vmaddr: u64 = vmaddr.into();
         let ma = self.file.read_bytes(desc, fileoff, vmaddr, len);
@@ -230,28 +260,41 @@ impl SymbolsState {
     }
 }
 
-
-pub fn get_function_symbol_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
+pub fn get_function_symbol_address(
+    process: &Process,
+    range: (Address, u64),
+    macho_bytes: &[u8],
+    function_name: &[u8],
+) -> Option<Address> {
     let ma = get_function_address(process, range, macho_bytes, function_name);
-    let mb = symbols(process, range).and_then(|mut ss| ss.find_map(|s| -> Option<Address> {
-        let n = s.get_name::<CSTR>(process).ok()?;
-        if n.matches(function_name) {
-            Some(s.address)
-        } else {
-            None
-        }
-    }));
+    let mb = symbols(process, range).and_then(|mut ss| {
+        ss.find_map(|s| -> Option<Address> {
+            let n = s.get_name::<CSTR>(process).ok()?;
+            if n.matches(function_name) {
+                Some(s.address)
+            } else {
+                None
+            }
+        })
+    });
     match (ma, mb) {
         (Some(a), Some(b)) => {
             if a == b {
-                asr::print_message(&format!("macho::get_function_symbol_address: all good, both Some and equal"));
+                asr::print_message(&format!(
+                    "macho::get_function_symbol_address: all good, both Some and equal"
+                ));
             } else {
-                asr::print_message(&format!("macho::get_function_symbol_address: mismatch, {} != {}", a, b));
+                asr::print_message(&format!(
+                    "macho::get_function_symbol_address: mismatch, {} != {}",
+                    a, b
+                ));
             }
             Some(a)
         }
         (Some(a), None) => {
-            asr::print_message("macho::get_function_symbol_address: only get_function_address worked");
+            asr::print_message(
+                "macho::get_function_symbol_address: only get_function_address worked",
+            );
             Some(a)
         }
         (None, Some(b)) => {
@@ -266,7 +309,12 @@ pub fn get_function_symbol_address(process: &Process, range: (Address, u64), mac
 }
 
 /// Finds the address of a function from a MachO module range and file contents.
-pub fn get_function_address(process: &Process, range: (Address, u64), macho_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
+pub fn get_function_address(
+    process: &Process,
+    range: (Address, u64),
+    macho_bytes: &[u8],
+    function_name: &[u8],
+) -> Option<Address> {
     // asr::print_message("macho get_function_address: before scan_macho_page");
     // NOTE: this page address is probably ONLY good for the header, NOT the function address
     let page = scan_macho_page(process, range)?;
@@ -274,7 +322,12 @@ pub fn get_function_address(process: &Process, range: (Address, u64), macho_byte
     let header_offset = memchr::memmem::find(macho_bytes, &header)?;
     let macho_bytes2 = &macho_bytes[header_offset..];
     // asr::print_message("macho get_function_address: before get_function_offset");
-    let function_offset: u32 = get_function_offset(MachOFile{ bytes: &macho_bytes2 }, function_name)?;
+    let function_offset: u32 = get_function_offset(
+        MachOFile {
+            bytes: &macho_bytes2,
+        },
+        function_name,
+    )?;
     // asr::print_message(&format!("macho get_function_address: function_offset: 0x{:X?}", function_offset));
     let bytes_expected: [u8; 0x100] = slice_read(&macho_bytes2, function_offset).ok()?;
     let signature: Signature<0x100> = Signature::Simple(bytes_expected);
@@ -286,35 +339,69 @@ pub fn get_function_address(process: &Process, range: (Address, u64), macho_byte
 /// Finds the offset of a function in the bytes of a MachO file.
 fn get_function_offset<M: MachOView>(macho_bytes: M, function_name: &[u8]) -> Option<u32> {
     let mut s = SymbolsState::new();
-    s.number_of_commands = macho_bytes.read("number_of_commands", s.offsets.number_of_commands, s.offsets.number_of_commands)?;
+    s.number_of_commands = macho_bytes.read(
+        "number_of_commands",
+        s.offsets.number_of_commands,
+        s.offsets.number_of_commands,
+    )?;
     let function_name_len = function_name.len();
 
     let mut offset_to_next_command = s.offsets.load_commands;
     for _i in 0..s.number_of_commands {
         // Check if load command is LC_SYMTAB
-        let next_command: u32 = macho_bytes.read("next_command", offset_to_next_command, offset_to_next_command)?;
+        let next_command: u32 = macho_bytes.read(
+            "next_command",
+            offset_to_next_command,
+            offset_to_next_command,
+        )?;
         if next_command == LC_SYMTAB {
             let next_command_symbol_table = offset_to_next_command + s.offsets.symbol_table_offset;
-            s.symbol_table_fileoff = macho_bytes.read("symbol_table_fileoff", next_command_symbol_table, next_command_symbol_table)?;
-            let next_command_number_of_symbols = offset_to_next_command + s.offsets.number_of_symbols;
-            s.number_of_symbols = macho_bytes.read("number_of_symbols", next_command_number_of_symbols, next_command_number_of_symbols)?;
+            s.symbol_table_fileoff = macho_bytes.read(
+                "symbol_table_fileoff",
+                next_command_symbol_table,
+                next_command_symbol_table,
+            )?;
+            let next_command_number_of_symbols =
+                offset_to_next_command + s.offsets.number_of_symbols;
+            s.number_of_symbols = macho_bytes.read(
+                "number_of_symbols",
+                next_command_number_of_symbols,
+                next_command_number_of_symbols,
+            )?;
             let next_command_string_table = offset_to_next_command + s.offsets.string_table_offset;
-            s.string_table_fileoff = macho_bytes.read("string_table_fileoff", next_command_string_table, next_command_string_table)?;
+            s.string_table_fileoff = macho_bytes.read(
+                "string_table_fileoff",
+                next_command_string_table,
+                next_command_string_table,
+            )?;
 
             for j in 0..s.number_of_symbols {
                 let symbol_table_j = s.symbol_table_fileoff + (j * s.offsets.size_of_nlist_item);
-                let symbol_name_offset: u32 = macho_bytes.read("symbol_name_offset", symbol_table_j, symbol_table_j)?;
+                let symbol_name_offset: u32 =
+                    macho_bytes.read("symbol_name_offset", symbol_table_j, symbol_table_j)?;
                 let string_offset = s.string_table_fileoff + symbol_name_offset;
-                let symbol_name: Vec<u8> = macho_bytes.read_bytes("symbol_name", string_offset, string_offset, function_name_len + 1)?;
+                let symbol_name: Vec<u8> = macho_bytes.read_bytes(
+                    "symbol_name",
+                    string_offset,
+                    string_offset,
+                    function_name_len + 1,
+                )?;
 
                 if symbol_name[function_name_len] == 0 && symbol_name.starts_with(function_name) {
-                    let symbol_table_j_value = s.symbol_table_fileoff + (j * s.offsets.size_of_nlist_item) + s.offsets.nlist_value;
-                    return Some(macho_bytes.read("function_offset", symbol_table_j_value, symbol_table_j_value)?);
+                    let symbol_table_j_value = s.symbol_table_fileoff
+                        + (j * s.offsets.size_of_nlist_item)
+                        + s.offsets.nlist_value;
+                    return Some(macho_bytes.read(
+                        "function_offset",
+                        symbol_table_j_value,
+                        symbol_table_j_value,
+                    )?);
                 }
             }
         }
         let next_command_size = offset_to_next_command + s.offsets.command_size;
-        let command_size: u32 = macho_bytes.read("command_size", next_command_size, next_command_size)?;
+        let command_size: u32 =
+            macho_bytes.read("command_size", next_command_size, next_command_size)?;
         offset_to_next_command += command_size;
     }
     None
@@ -322,7 +409,10 @@ fn get_function_offset<M: MachOView>(macho_bytes: M, function_name: &[u8]) -> Op
 
 /// Reads a value of the type specified from the slice at the address
 /// given.
-pub fn slice_read<T: bytemuck::CheckedBitPattern, N: Into<u64>>(slice: &[u8], address: N) -> Result<T, bytemuck::checked::CheckedCastError> {
+pub fn slice_read<T: bytemuck::CheckedBitPattern, N: Into<u64>>(
+    slice: &[u8],
+    address: N,
+) -> Result<T, bytemuck::checked::CheckedCastError> {
     let start: usize = Into::<u64>::into(address) as usize;
     let size = mem::size_of::<T>();
     let slice_src = &slice[start..(start + size)];
@@ -336,19 +426,40 @@ pub fn symbols(
     let page = scan_macho_page(process, range)?;
     let m = MachOMemory { process, page };
     let mut s = SymbolsState::new();
-    s.number_of_commands = m.read("number_of_commands", s.offsets.number_of_commands, s.offsets.number_of_commands)?;
+    s.number_of_commands = m.read(
+        "number_of_commands",
+        s.offsets.number_of_commands,
+        s.offsets.number_of_commands,
+    )?;
 
     let mut offset_to_next_command: u32 = s.offsets.load_commands;
     for _i in 0..s.number_of_commands {
         // Check if load command is LC_SYMTAB or LC_SEGMENT_64
-        let next_command: u32 = m.read("next_command", offset_to_next_command, offset_to_next_command)?;
+        let next_command: u32 = m.read(
+            "next_command",
+            offset_to_next_command,
+            offset_to_next_command,
+        )?;
         if next_command == LC_SYMTAB {
             let next_command_symbol_table = offset_to_next_command + s.offsets.symbol_table_offset;
-            s.symbol_table_fileoff = m.read("symbol_table_fileoff", next_command_symbol_table, next_command_symbol_table)?;
-            let next_command_number_of_symbols = offset_to_next_command + s.offsets.number_of_symbols;
-            s.number_of_symbols = m.read("number_of_symbols", next_command_number_of_symbols, next_command_number_of_symbols)?;
+            s.symbol_table_fileoff = m.read(
+                "symbol_table_fileoff",
+                next_command_symbol_table,
+                next_command_symbol_table,
+            )?;
+            let next_command_number_of_symbols =
+                offset_to_next_command + s.offsets.number_of_symbols;
+            s.number_of_symbols = m.read(
+                "number_of_symbols",
+                next_command_number_of_symbols,
+                next_command_number_of_symbols,
+            )?;
             let next_command_string_table = offset_to_next_command + s.offsets.string_table_offset;
-            s.string_table_fileoff = m.read("string_table_fileoff", next_command_string_table, next_command_string_table)?;
+            s.string_table_fileoff = m.read(
+                "string_table_fileoff",
+                next_command_string_table,
+                next_command_string_table,
+            )?;
         } else if next_command == LC_SEGMENT_64 {
             let next_command_vmaddr = offset_to_next_command + s.offsets.segmentcommand64_vmaddr;
             let vmaddr: u64 = m.read("vmaddr", next_command_vmaddr, next_command_vmaddr)?;
@@ -365,38 +476,45 @@ pub fn symbols(
         return None;
     }
 
-    s.symbol_table_vmaddr = fileoff_to_vmaddr(&s.map_fileoff_to_vmaddr, s.symbol_table_fileoff as u64);
+    s.symbol_table_vmaddr =
+        fileoff_to_vmaddr(&s.map_fileoff_to_vmaddr, s.symbol_table_fileoff as u64);
 
-    s.string_table_vmaddr = fileoff_to_vmaddr(&s.map_fileoff_to_vmaddr, s.string_table_fileoff as u64);
+    s.string_table_vmaddr =
+        fileoff_to_vmaddr(&s.map_fileoff_to_vmaddr, s.string_table_fileoff as u64);
 
     // TODO: figure out what this means:
     // https://www.reddit.com/r/jailbreakdevelopers/comments/ol9m1s/confusion_about_macho_offsets_and_addresses/
 
-    Some((0..s.number_of_symbols).filter_map(move |j| {
-        let symbol_name_offset: u32 = m.read(
-            "symbol_name_offset",
-            (s.symbol_table_fileoff + (j * s.offsets.size_of_nlist_item)) as u64,
-            s.symbol_table_vmaddr + (j * s.offsets.size_of_nlist_item) as u64,
-        )?;
-        let string_address = page + s.string_table_vmaddr + symbol_name_offset;
-        let symbol_fileoff = m.read(
-            "symbol_fileoff",
-            (s.symbol_table_fileoff + (j * s.offsets.size_of_nlist_item) + s.offsets.nlist_value) as u64,
-            s.symbol_table_vmaddr + ((j * s.offsets.size_of_nlist_item) + s.offsets.nlist_value) as u64,
-        )?;
-        let symbol_vmaddr = fileoff_to_vmaddr(&s.map_fileoff_to_vmaddr, symbol_fileoff);
-        let symbol_address = page + symbol_vmaddr;
-        Some(Symbol {
-            address: symbol_address,
-            name_addr: string_address,
-        })
-    })
-    .fuse())
+    Some(
+        (0..s.number_of_symbols)
+            .filter_map(move |j| {
+                let symbol_name_offset: u32 = m.read(
+                    "symbol_name_offset",
+                    (s.symbol_table_fileoff + (j * s.offsets.size_of_nlist_item)) as u64,
+                    s.symbol_table_vmaddr + (j * s.offsets.size_of_nlist_item) as u64,
+                )?;
+                let string_address = page + s.string_table_vmaddr + symbol_name_offset;
+                let symbol_fileoff = m.read(
+                    "symbol_fileoff",
+                    (s.symbol_table_fileoff
+                        + (j * s.offsets.size_of_nlist_item)
+                        + s.offsets.nlist_value) as u64,
+                    s.symbol_table_vmaddr
+                        + ((j * s.offsets.size_of_nlist_item) + s.offsets.nlist_value) as u64,
+                )?;
+                let symbol_vmaddr = fileoff_to_vmaddr(&s.map_fileoff_to_vmaddr, symbol_fileoff);
+                let symbol_address = page + symbol_vmaddr;
+                Some(Symbol {
+                    address: symbol_address,
+                    name_addr: string_address,
+                })
+            })
+            .fuse(),
+    )
 }
 
 fn fileoff_to_vmaddr(map: &BTreeMap<u64, u64>, fileoff: u64) -> u64 {
-    map
-        .iter()
+    map.iter()
         .filter(|(&k, _)| k <= fileoff)
         .max_by_key(|(&k, _)| k) // can/should this max_by_key be replaced with last?
         .map(|(&k, &v)| v + fileoff - k)

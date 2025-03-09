@@ -1,7 +1,7 @@
 use core::mem;
 
-use asr::{file_format::elf::Info, signature::Signature, Address, PointerSize, Process};
 pub use asr::file_format::elf;
+use asr::{file_format::elf::Info, signature::Signature, Address, PointerSize, Process};
 use bytemuck::{Pod, Zeroable};
 
 // --------------------------------------------------------
@@ -122,8 +122,12 @@ pub fn detect_pointer_size(process: &Process, module_range: (Address, u64)) -> O
     }
 }
 
-
-pub fn get_function_symbol_address(process: &Process, range: (Address, u64), elf_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
+pub fn get_function_symbol_address(
+    process: &Process,
+    range: (Address, u64),
+    elf_bytes: &[u8],
+    function_name: &[u8],
+) -> Option<Address> {
     let ma = get_function_address(process, range, elf_bytes, function_name);
     let mb = elf::symbols(process, range.0).find_map(|s| -> Option<Address> {
         let n = s.get_name::<CSTR>(process).ok()?;
@@ -136,14 +140,21 @@ pub fn get_function_symbol_address(process: &Process, range: (Address, u64), elf
     match (ma, mb) {
         (Some(a), Some(b)) => {
             if a == b {
-                asr::print_message(&format!("elf::get_function_symbol_address: all good, both Some and equal"));
+                asr::print_message(&format!(
+                    "elf::get_function_symbol_address: all good, both Some and equal"
+                ));
             } else {
-                asr::print_message(&format!("elf::get_function_symbol_address: mismatch, {} != {}", a, b));
+                asr::print_message(&format!(
+                    "elf::get_function_symbol_address: mismatch, {} != {}",
+                    a, b
+                ));
             }
             Some(a)
         }
         (Some(a), None) => {
-            asr::print_message("elf::get_function_symbol_address: only get_function_address worked");
+            asr::print_message(
+                "elf::get_function_symbol_address: only get_function_address worked",
+            );
             Some(a)
         }
         (None, Some(b)) => {
@@ -157,9 +168,13 @@ pub fn get_function_symbol_address(process: &Process, range: (Address, u64), elf
     }
 }
 
-
 /// Finds the address of a function from an ELF module range and file contents.
-pub fn get_function_address(process: &Process, range: (Address, u64), elf_bytes: &[u8], function_name: &[u8]) -> Option<Address> {
+pub fn get_function_address(
+    process: &Process,
+    range: (Address, u64),
+    elf_bytes: &[u8],
+    function_name: &[u8],
+) -> Option<Address> {
     let page = scan_elf_page(process, range)?;
     let header: [u8; HEADER_SIZE] = process.read(page).ok()?;
     let header_offset = memchr::memmem::find(elf_bytes, &header)?;
@@ -196,14 +211,17 @@ fn get_function_offset(bs: &[u8], function_name: &[u8]) -> Option<u32> {
             let sh_size: u32 = slice_read(&bs, ent_a + offsets.sh_size).ok()?;
             let string_table_i: u32 = slice_read(&bs, ent_a + offsets.sh_link).ok()?;
             let sh_entsize: u32 = slice_read(&bs, ent_a + offsets.sh_entsize).ok()?;
-            let string_table_ent_a = shoff as usize + (string_table_i as usize * shentsize as usize);
-            let string_table_a: u32 = slice_read(&bs, string_table_ent_a + offsets.sh_offset).ok()?;
+            let string_table_ent_a =
+                shoff as usize + (string_table_i as usize * shentsize as usize);
+            let string_table_a: u32 =
+                slice_read(&bs, string_table_ent_a + offsets.sh_offset).ok()?;
             let number_of_symbols = sh_size / sh_entsize;
             for j in 0..number_of_symbols {
                 let sym_ent_a = symbol_table_a as usize + (j * sh_entsize) as usize;
                 let symbol_name_offset: u32 = slice_read(&bs, sym_ent_a + offsets.st_name).ok()?;
                 let string_offset = string_table_a as usize + symbol_name_offset as usize;
-                let symbol_name: &[u8] = &bs[string_offset..(string_offset + function_name_len + 1)];
+                let symbol_name: &[u8] =
+                    &bs[string_offset..(string_offset + function_name_len + 1)];
                 if symbol_name[function_name_len] == 0 && symbol_name.starts_with(function_name) {
                     return Some(slice_read::<u32>(&bs, sym_ent_a + offsets.st_value).ok()?);
                 }
@@ -215,7 +233,10 @@ fn get_function_offset(bs: &[u8], function_name: &[u8]) -> Option<u32> {
 
 /// Reads a value of the type specified from the slice at the address
 /// given.
-fn slice_read<T: bytemuck::CheckedBitPattern>(slice: &[u8], address: usize) -> Result<T, bytemuck::checked::CheckedCastError> {
+fn slice_read<T: bytemuck::CheckedBitPattern>(
+    slice: &[u8],
+    address: usize,
+) -> Result<T, bytemuck::checked::CheckedCastError> {
     let size = mem::size_of::<T>();
     let slice_src = &slice[address..(address + size)];
     bytemuck::checked::try_from_bytes(slice_src).cloned()

@@ -1,4 +1,3 @@
-
 use asr::{Address, Process};
 
 // --------------------------------------------------------
@@ -16,14 +15,23 @@ const PAGE_SIZE: u64 = 0x1000;
 
 pub fn process_detect_binary_format(process: &Process, name: &str) -> Option<BinaryFormat> {
     let address = process.get_module_address(name).ok()?;
-    asr::print_message(&format!("process_detect_binary_format: address = {}", address));
+    asr::print_message(&format!(
+        "process_detect_binary_format: address = {}",
+        address
+    ));
     address_detect_binary_format(process, address)
 }
 
-pub fn scan_page_detect_binary_format(process: &Process, range: (Address, u64)) -> Option<BinaryFormat> {
+pub fn scan_page_detect_binary_format(
+    process: &Process,
+    range: (Address, u64),
+) -> Option<BinaryFormat> {
     let address = scan_page(process, range)?;
     if address != range.0 {
-        asr::print_message(&format!("scan_page_detect_binary_format: offset = 0x{:X?}", address.value() - range.0.value()));
+        asr::print_message(&format!(
+            "scan_page_detect_binary_format: offset = 0x{:X?}",
+            address.value() - range.0.value()
+        ));
     }
     address_detect_binary_format(process, address)
 }
@@ -61,10 +69,11 @@ fn bytes_detect_binary_format(bytes: &[u8]) -> Option<BinaryFormat> {
     } else if bytes.starts_with(&[0x7F, 0x45, 0x4C, 0x46]) {
         Some(BinaryFormat::ELF)
     } else if bytes.starts_with(&[0xFE, 0xED, 0xFA, 0xCE])
-           || bytes.starts_with(&[0xFE, 0xED, 0xFA, 0xCF])
-           || bytes.starts_with(&[0xCE, 0xFA, 0xED, 0xFE])
-           || bytes.starts_with(&[0xCF, 0xFA, 0xED, 0xFE])
-           || bytes.starts_with(&[0xCA, 0xFE, 0xBA, 0xBE]) {
+        || bytes.starts_with(&[0xFE, 0xED, 0xFA, 0xCF])
+        || bytes.starts_with(&[0xCE, 0xFA, 0xED, 0xFE])
+        || bytes.starts_with(&[0xCF, 0xFA, 0xED, 0xFE])
+        || bytes.starts_with(&[0xCA, 0xFE, 0xBA, 0xBE])
+    {
         Some(BinaryFormat::MachO)
     } else {
         None
