@@ -1022,7 +1022,7 @@ async fn static_table_offsets_v2_v3(
 ) -> Option<()> {
     // this V2/V3 monoclass_vtable_size is actually TypeDefinitionVTableSize
     let monoclass_vtable_size =
-        [0x38, 0x54, 0x5C]
+        [0x34, 0x38, 0x3C, 0x4C, 0x54, 0x5C, 0x64]
             .into_iter()
             .max_by_key(|&monoclass_vtable_size| {
                 let vtable_size_score: i32 = map_name_class_field_counts
@@ -1076,7 +1076,7 @@ async fn static_table_offsets_v2_v3(
     */
 
     let monovtable_vtable =
-        [0x28, 0x2C, 0x40, 0x48]
+        [0x24, 0x28, 0x2C, 0x30, 0x38, 0x40, 0x48, 0x50]
             .into_iter()
             .max_by_key(|&monovtable_vtable| {
                 let vtable_score: i32 = v2_v3_monovtable_vtable_score(
