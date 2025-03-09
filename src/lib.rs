@@ -470,12 +470,13 @@ async fn option_main(process: &Process, name: &str) -> Option<()> {
     ));
 
     let (monoclass_image, monoclass_name, monoclass_name_space) = [
-        (0x28, 0x2C, 0x30),
-        (0x2C, 0x30, 0x34),
-        (0x30, 0x34, 0x38),
+        (0x28, 0x2C, 0x30), // Bit32, PE, V2/V3
+        (0x2C, 0x30, 0x34), // Bit32, PE, V1
+        (0x30, 0x34, 0x38), // Bit32, PE, V1Cattrs
         (0x30, 0x38, 0x40),
-        (0x30, 0x40, 0x48),
-        (0x40, 0x48, 0x50),
+        (0x38, 0x40, 0x48), // Bit64, ELF/MachO, V1/V2/V3?
+        (0x40, 0x48, 0x50), // Bit64, ELF/MachO, V1Cattrs | Bit64, PE, V1/V2/V3
+        (0x48, 0x50, 0x58), // Bit64, PE, V1Cattrs
     ]
     .into_iter()
     .max_by_key(|&(monoclass_image, monoclass_name, monoclass_name_space)| {
