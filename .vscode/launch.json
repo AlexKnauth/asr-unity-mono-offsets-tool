@@ -10,7 +10,7 @@
             "program": "asr-debugger",
             "args": [
                 "--debug",
-                "target${pathSeparator}wasm32-wasi${pathSeparator}debug${pathSeparator}asr_unity_mono_offsets_tool.wasm"
+                "target${pathSeparator}wasm32-wasip1${pathSeparator}debug${pathSeparator}asr_unity_mono_offsets_tool.wasm"
             ],
             "cwd": "${workspaceFolder}"
         }

@@ -23,7 +23,7 @@ jobs:
         uses: hecrj/setup-rust-action@v1
         with:
           rust-version: stable
-          targets: wasm32-wasi
+          targets: wasm32-wasip1
 
       - name: Build
         run: |
@@ -33,7 +33,7 @@ jobs:
         if: github.ref == 'refs/heads/master'
         uses: softprops/action-gh-release@v1
         with:
-          files: target/wasm32-wasi/release/asr_unity_mono_offsets_tool.wasm
+          files: target/wasm32-wasip1/release/asr_unity_mono_offsets_tool.wasm
           name: Latest
           tag_name: latest
           body: This contains the latest version of the auto splitter.
@@ -49,7 +49,7 @@ jobs:
         uses: hecrj/setup-rust-action@v1
         with:
           components: clippy
-          targets: wasm32-wasi
+          targets: wasm32-wasip1
 
       - name: Run Clippy
         run: cargo clippy --all-features
