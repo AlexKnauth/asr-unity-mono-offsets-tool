@@ -103,6 +103,12 @@ const NAME_FIELD_COUNTS: [(&str, (&[u32], &[u32])); 5] = [
     ("UInt32", (&[3], &[25, 26])),
 ];
 
+// [(class_name,
+//   [(static_field_name,
+//     [([(nested_class_name, nested_field_name), ...], [byte, ...]),
+//      ...]),
+//    ...]),
+//  ...]
 const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 9] = [
     (
         "Boolean",
@@ -1637,9 +1643,9 @@ fn v2_v3_monovtable_vtable_score(
 ) -> Option<i32> {
     let map_name_static_field_bytes: BTreeMap<&str, &[(&str, &[(&[(&str, &str)], &[u8])])]> =
         BTreeMap::from(NAME_STATIC_FIELD_BYTES);
-    for (k, sfbs) in map_name_static_field_bytes {
-        let Some(&c) = map_name_class.get(k) else {
-            asr::print_message(&format!("map_name_class.get failed: {}", k));
+    for (class_name, sfbs) in map_name_static_field_bytes {
+        let Some(&c) = map_name_class.get(class_name) else {
+            asr::print_message(&format!("map_name_class.get failed: {}", class_name));
             return None;
         };
         let Ok(runtime_info) = read_pointer(
@@ -1672,12 +1678,12 @@ fn v2_v3_monovtable_vtable_score(
         ) else {
             return Some(0);
         };
-        for (sf, bs) in sfbs {
+        for (static_field_name, bs) in sfbs {
             let Some(offset) = class_field_name_offset(
                 process,
                 pointer_size,
                 c,
-                sf,
+                static_field_name,
                 monoclassdef_klass,
                 monoclassdef_field_count,
                 monoclass_fields,
@@ -1688,16 +1694,16 @@ fn v2_v3_monovtable_vtable_score(
                 return Some(10);
             };
             let mut a = static_table + offset;
-            for (p, v) in bs.into_iter() {
-                for &(vcn, vf) in p.into_iter() {
-                    let Some(&vc) = map_name_class.get(vcn) else {
+            for (nesteds, bytes) in bs.into_iter() {
+                for &(nested_class_name, nested_field_name) in nesteds.into_iter() {
+                    let Some(&vc) = map_name_class.get(nested_class_name) else {
                         return Some(11);
                     };
                     let Some(o) = class_field_name_offset(
                         process,
                         pointer_size,
                         vc,
-                        vf,
+                        nested_field_name,
                         monoclassdef_klass,
                         monoclassdef_field_count,
                         monoclass_fields,
@@ -1719,7 +1725,7 @@ fn v2_v3_monovtable_vtable_score(
                     return Some(21);
                 };
                 // asr::print_message(&format!("v_acual: {:X?}, v: {:X?}", v_actual, v));
-                if &v_actual != v {
+                if &v_actual != bytes {
                     return Some(30);
                 }
             }
