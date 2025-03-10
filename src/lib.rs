@@ -111,6 +111,7 @@ const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 
                 "TrueString",
                 &[
                     (&[("String", "m_stringLength")], &[0x04]),
+                    (&[("String", "_stringLength")], &[0x04]),
                     // (&[("String", "m_firstChar")], &[b'T']),
                 ],
             ),
@@ -118,6 +119,7 @@ const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 
                 "FalseString",
                 &[
                     (&[("String", "m_stringLength")], &[0x05]),
+                    (&[("String", "_stringLength")], &[0x05]),
                     // (&[("String", "m_firstChar")], &[b'F']),
                 ],
             ),
@@ -141,7 +143,13 @@ const NAME_STATIC_FIELD_BYTES: [(&str, &[(&str, &[(&[(&str, &str)], &[u8])])]); 
     ),
     (
         "String",
-        &[("Empty", &[(&[("String", "m_stringLength")], &[0x00])])],
+        &[(
+            "Empty",
+            &[
+                (&[("String", "m_stringLength")], &[0x00]),
+                (&[("String", "_stringLength")], &[0x00]),
+            ],
+        )],
     ),
     (
         "TimeSpan",
@@ -1095,7 +1103,10 @@ async fn static_table_offsets_v2_v3(
                     monovtable_vtable,
                 )
                 .unwrap_or_default();
-                // asr::print_message(&format!("{:?} monovtable_vtable: 0x{:X}, vtable_score: {}", version, monovtable_vtable, vtable_score));
+                asr::print_message(&format!(
+                    "{:?} monovtable_vtable: 0x{:X}, vtable_score: {}",
+                    version, monovtable_vtable, vtable_score
+                ));
                 vtable_score
             })?;
     let vtable_score: i32 = v2_v3_monovtable_vtable_score(
@@ -1115,10 +1126,10 @@ async fn static_table_offsets_v2_v3(
     )
     .unwrap_or_default();
     asr::print_message(&format!(
-        "{:?} Offsets monovtable_vtable: 0x{:X}, vtable_score: {} / 4",
+        "{:?} Offsets monovtable_vtable: 0x{:X}, vtable_score: {} / 40???",
         version, monovtable_vtable, vtable_score
     ));
-    if vtable_score < 4 {
+    if vtable_score < 40 {
         asr::print_message("BAD: vtable_score is not at maximum");
     }
     Some(())
@@ -1640,7 +1651,7 @@ fn v2_v3_monovtable_vtable_score(
         };
         // It's okay to be null?
         if runtime_info.is_null() {
-            return Some(2);
+            return Some(20);
         }
         let Ok(vtables) = read_pointer(
             process,
@@ -1674,13 +1685,13 @@ fn v2_v3_monovtable_vtable_score(
                 monoclassfield_name,
                 monoclassfield_offset,
             ) else {
-                return Some(1);
+                return Some(10);
             };
             let mut a = static_table + offset;
             for (p, v) in bs.into_iter() {
                 for &(vcn, vf) in p.into_iter() {
                     let Some(&vc) = map_name_class.get(vcn) else {
-                        return Some(1);
+                        return Some(11);
                     };
                     let Some(o) = class_field_name_offset(
                         process,
@@ -1694,24 +1705,27 @@ fn v2_v3_monovtable_vtable_score(
                         monoclassfield_name,
                         monoclassfield_offset,
                     ) else {
-                        return Some(1);
+                        // asr::print_message(&format!("class_field_name_offset failed. k: {}, p: {:?}, vcn: {}, vf: {}", k, p, vcn, vf));
+                        // let ns: Vec<String> = class_field_names_offsets_iter(process, pointer_size, vc, monoclassdef_klass, monoclassdef_field_count, monoclass_fields, monoclassfieldalignment, monoclassfield_name, monoclassfield_offset).map(|(n, _)| n).collect();
+                        // asr::print_message(&format!("ns: {:?}", ns));
+                        return Some(12);
                     };
                     let Ok(a2) = read_pointer(process, pointer_size, a) else {
-                        return Some(1);
+                        return Some(13);
                     };
                     a = a2 + o;
                 }
                 let Ok(v_actual) = process.read::<[u8; 1]>(a) else {
-                    return Some(2);
+                    return Some(21);
                 };
                 // asr::print_message(&format!("v_acual: {:X?}, v: {:X?}", v_actual, v));
                 if &v_actual != v {
-                    return Some(3);
+                    return Some(30);
                 }
             }
         }
     }
-    Some(4)
+    Some(40)
 }
 
 // --------------------------------------------------------
