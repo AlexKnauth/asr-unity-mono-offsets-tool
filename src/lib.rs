@@ -1035,25 +1035,24 @@ async fn static_table_offsets_v2_v3(
     monoclassruntimeinfo_domain_vtables: i32,
 ) -> Option<()> {
     // this V2/V3 monoclass_vtable_size is actually TypeDefinitionVTableSize
-    let monoclass_vtable_size =
-        [0x34, 0x38, 0x3C, 0x4C, 0x54, 0x5C, 0x64]
-            .into_iter()
-            .max_by_key(|&monoclass_vtable_size| {
-                let vtable_size_score: i32 = map_name_class_field_counts
-                    .values()
-                    .map(|&(c, _, n)| {
-                        v2_v3_monoclass_vtable_size_score(
-                            process,
-                            monoclassdef_klass,
-                            monoclass_vtable_size,
-                            c,
-                            n,
-                        )
-                    })
-                    .sum();
-                // asr::print_message(&format!("{:?} monoclass_vtable_size (TypeDefinitionVTableSize): 0x{:X}, vtable_size_score: {}", version, monoclass_vtable_size, vtable_size_score));
-                vtable_size_score
-            })?;
+    let monoclass_vtable_size = [0x34, 0x38, 0x3C, 0x4C, 0x54, 0x5C, 0x64]
+        .into_iter()
+        .max_by_key(|&monoclass_vtable_size| {
+            let vtable_size_score: i32 = map_name_class_field_counts
+                .values()
+                .map(|&(c, _, n)| {
+                    v2_v3_monoclass_vtable_size_score(
+                        process,
+                        monoclassdef_klass,
+                        monoclass_vtable_size,
+                        c,
+                        n,
+                    )
+                })
+                .sum();
+            // asr::print_message(&format!("{:?} monoclass_vtable_size (TypeDefinitionVTableSize): 0x{:X}, vtable_size_score: {}", version, monoclass_vtable_size, vtable_size_score));
+            vtable_size_score
+        })?;
     asr::print_message(&format!(
         "{:?} Offsets monoclass_vtable_size (TypeDefinitionVTableSize): 0x{:X}",
         version, monoclass_vtable_size
@@ -1089,32 +1088,31 @@ async fn static_table_offsets_v2_v3(
     TimeSpan: MinValue: 0x10 = new TimeSpan(Int64.MinValue)
     */
 
-    let monovtable_vtable =
-        [0x24, 0x28, 0x2C, 0x30, 0x38, 0x40, 0x48, 0x50]
-            .into_iter()
-            .max_by_key(|&monovtable_vtable| {
-                let vtable_score: i32 = v2_v3_monovtable_vtable_score(
-                    process,
-                    pointer_size,
-                    &map_name_class,
-                    monoclassdef_klass,
-                    monoclassdef_field_count,
-                    monoclass_fields,
-                    monoclassfieldalignment,
-                    monoclassfield_name,
-                    monoclassfield_offset,
-                    monoclass_runtime_info,
-                    monoclassruntimeinfo_domain_vtables,
-                    monoclass_vtable_size,
-                    monovtable_vtable,
-                )
-                .unwrap_or_default();
-                asr::print_message(&format!(
-                    "{:?} monovtable_vtable: 0x{:X}, vtable_score: {}",
-                    version, monovtable_vtable, vtable_score
-                ));
-                vtable_score
-            })?;
+    let monovtable_vtable = [0x24, 0x28, 0x2C, 0x30, 0x38, 0x40, 0x48, 0x50]
+        .into_iter()
+        .max_by_key(|&monovtable_vtable| {
+            let vtable_score: i32 = v2_v3_monovtable_vtable_score(
+                process,
+                pointer_size,
+                &map_name_class,
+                monoclassdef_klass,
+                monoclassdef_field_count,
+                monoclass_fields,
+                monoclassfieldalignment,
+                monoclassfield_name,
+                monoclassfield_offset,
+                monoclass_runtime_info,
+                monoclassruntimeinfo_domain_vtables,
+                monoclass_vtable_size,
+                monovtable_vtable,
+            )
+            .unwrap_or_default();
+            asr::print_message(&format!(
+                "{:?} monovtable_vtable: 0x{:X}, vtable_score: {}",
+                version, monovtable_vtable, vtable_score
+            ));
+            vtable_score
+        })?;
     let vtable_score: i32 = v2_v3_monovtable_vtable_score(
         process,
         pointer_size,
