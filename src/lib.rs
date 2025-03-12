@@ -1091,7 +1091,7 @@ async fn static_table_offsets_v2_v3(
     let monovtable_vtable = [0x24, 0x28, 0x2C, 0x30, 0x38, 0x40, 0x48, 0x50]
         .into_iter()
         .max_by_key(|&monovtable_vtable| {
-            let vtable_score: i32 = v2_v3_monovtable_vtable_score(
+            let (vtable_score, vtable_cap) = v2_v3_monovtable_vtable_score(
                 process,
                 pointer_size,
                 &map_name_class,
@@ -1105,15 +1105,16 @@ async fn static_table_offsets_v2_v3(
                 monoclassruntimeinfo_domain_vtables,
                 monoclass_vtable_size,
                 monovtable_vtable,
-            )
-            .unwrap_or_default();
+            );
+            /*
             asr::print_message(&format!(
-                "{:?} monovtable_vtable: 0x{:X}, vtable_score: {}",
-                version, monovtable_vtable, vtable_score
+                "{:?} monovtable_vtable: 0x{:X} ? vtable_score: {} / {}",
+                version, monovtable_vtable, vtable_score, vtable_cap
             ));
+            */
             vtable_score
         })?;
-    let vtable_score: i32 = v2_v3_monovtable_vtable_score(
+    let (vtable_score, vtable_cap) = v2_v3_monovtable_vtable_score(
         process,
         pointer_size,
         &map_name_class,
@@ -1127,13 +1128,12 @@ async fn static_table_offsets_v2_v3(
         monoclassruntimeinfo_domain_vtables,
         monoclass_vtable_size,
         monovtable_vtable,
-    )
-    .unwrap_or_default();
+    );
     asr::print_message(&format!(
-        "{:?} Offsets monovtable_vtable: 0x{:X}, vtable_score: {} / 40???",
-        version, monovtable_vtable, vtable_score
+        "{:?} Offsets monovtable_vtable: 0x{:X}, vtable_score: {} / {}",
+        version, monovtable_vtable, vtable_score, vtable_cap
     ));
-    if vtable_score < 40 {
+    if vtable_score < vtable_cap {
         asr::print_message("BAD: vtable_score is not at maximum");
     }
     Some(())
@@ -1638,44 +1638,63 @@ fn v2_v3_monovtable_vtable_score(
     monoclassruntimeinfo_domain_vtables: i32,
     monoclass_vtable_size: i32,
     monovtable_vtable: i32,
-) -> Option<i32> {
+) -> (i32, i32) {
+    let mut score = 0;
+    let mut cap = 0;
     let map_name_static_field_bytes: BTreeMap<&str, &[(&str, &[(&[(&str, &str)], &[u8])])]> =
         BTreeMap::from(NAME_STATIC_FIELD_BYTES);
     for (class_name, sfbs) in map_name_static_field_bytes {
         let Some(&c) = map_name_class.get(class_name) else {
             asr::print_message(&format!("map_name_class.get failed: {}", class_name));
-            return None;
+            cap += 1;
+            continue;
         };
+        score += 1;
+        cap += 1;
         let Ok(runtime_info) = read_pointer(
             process,
             pointer_size,
             c + monoclassdef_klass + monoclass_runtime_info,
         ) else {
-            return Some(0);
+            cap += 1;
+            continue;
         };
+        score += 1;
+        cap += 1;
         // It's okay to be null?
         if runtime_info.is_null() {
-            return Some(20);
+            continue;
         }
+        score += 1;
+        cap += 1;
         let Ok(vtables) = read_pointer(
             process,
             pointer_size,
             runtime_info + monoclassruntimeinfo_domain_vtables,
         ) else {
-            return Some(0);
+            cap += 1;
+            continue;
         };
+        score += 1;
+        cap += 1;
         let Ok(vtable_size) = process.read::<u32>(c + monoclassdef_klass + monoclass_vtable_size)
         else {
-            return Some(0);
+            cap += 1;
+            continue;
         };
+        score += 1;
+        cap += 1;
         let vtables2 = vtables + monovtable_vtable;
         let Ok(static_table) = read_pointer(
             process,
             pointer_size,
             vtables2 + (vtable_size as u64).wrapping_mul(pointer_size as u64),
         ) else {
-            return Some(0);
+            cap += 1;
+            continue;
         };
+        score += 1;
+        cap += 1;
         for (static_field_name, bs) in sfbs {
             let Some(offset) = class_field_name_offset(
                 process,
@@ -1689,14 +1708,22 @@ fn v2_v3_monovtable_vtable_score(
                 monoclassfield_name,
                 monoclassfield_offset,
             ) else {
-                return Some(10);
+                // it's okay for the field not to exist
+                continue;
             };
+            score += 1;
+            cap += 1;
             let mut a = static_table + offset;
             for (nesteds, bytes) in bs.into_iter() {
+                let mut bad = false;
                 for &(nested_class_name, nested_field_name) in nesteds.into_iter() {
                     let Some(&vc) = map_name_class.get(nested_class_name) else {
-                        return Some(11);
+                        cap += 1;
+                        bad = true;
+                        break;
                     };
+                    score += 1;
+                    cap += 1;
                     let Some(o) = class_field_name_offset(
                         process,
                         pointer_size,
@@ -1709,27 +1736,43 @@ fn v2_v3_monovtable_vtable_score(
                         monoclassfield_name,
                         monoclassfield_offset,
                     ) else {
-                        // asr::print_message(&format!("class_field_name_offset failed. k: {}, p: {:?}, vcn: {}, vf: {}", k, p, vcn, vf));
-                        // let ns: Vec<String> = class_field_names_offsets_iter(process, pointer_size, vc, monoclassdef_klass, monoclassdef_field_count, monoclass_fields, monoclassfieldalignment, monoclassfield_name, monoclassfield_offset).map(|(n, _)| n).collect();
-                        // asr::print_message(&format!("ns: {:?}", ns));
-                        return Some(12);
+                        // it's okay for the field not to exist
+                        bad = true;
+                        break;
                     };
+                    score += 1;
+                    cap += 1;
                     let Ok(a2) = read_pointer(process, pointer_size, a) else {
-                        return Some(13);
+                        cap += 1;
+                        bad = true;
+                        break;
                     };
+                    score += 1;
+                    cap += 1;
                     a = a2 + o;
                 }
+                if bad {
+                    continue;
+                }
+                score += 1;
+                cap += 1;
                 let Ok(v_actual) = process.read::<[u8; 1]>(a) else {
-                    return Some(21);
+                    cap += 10;
+                    continue;
                 };
+                score += 10;
+                cap += 10;
                 // asr::print_message(&format!("v_acual: {:X?}, v: {:X?}", v_actual, v));
                 if &v_actual != bytes {
-                    return Some(30);
+                    cap += 10;
+                    continue;
                 }
+                score += 10;
+                cap += 10;
             }
         }
     }
-    Some(40)
+    (score, cap)
 }
 
 // --------------------------------------------------------
