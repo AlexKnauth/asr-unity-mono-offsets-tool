@@ -30,9 +30,10 @@ asr::async_main!(stable);
 
 const CSTR: usize = 128;
 
-const PROCESS_NAMES: [&str; 11] = [
+const PROCESS_NAMES: [&str; 15] = [
     "Clone Hero",
     "Clone Hero.exe",
+    "Haste",
     "Haste.exe",
     "Haste.x86_64",
     "Hollow Knight",
@@ -40,6 +41,9 @@ const PROCESS_NAMES: [&str; 11] = [
     "hollow_knight.exe",
     "hollow_knight.x86_64",
     "hollow_knight.x",
+    "Pulse",
+    "Pulse.exe",
+    "Pulse.x86",
     "SuperliminalSteam",
     "SuperliminalSteam.exe",
 ];
