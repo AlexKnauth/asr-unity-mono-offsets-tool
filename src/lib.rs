@@ -445,16 +445,16 @@ async fn option_main(process: &Process, name: &str) -> Option<()> {
         monointernalhashtable_table,
     );
     asr::print_message(&format!(
-        "Offsets monoimage_class_cache: 0x{:X?}, class_cache_score: {} / 8",
+        "Offsets monoimage_class_cache: 0x{:X?}, class_cache_score: {} / 9",
         monoimage_class_cache, class_cache_score
     ));
-    if class_cache_score < 8 {
+    if class_cache_score < 9 {
         asr::print_message("BAD: class_cache_score is not at maximum");
     }
     let class_cache_size = process
         .read::<i32>(default_image + monoimage_class_cache + monointernalhashtable_size)
         .ok()?;
-    // asr::print_message(&format!("class_cache_size: {}", class_cache_size));
+    asr::print_message(&format!("class_cache_size: {}", class_cache_size));
     let table_addr = read_pointer(
         process,
         pointer_size,
@@ -1257,32 +1257,38 @@ fn monoimage_class_cache_score(
     else {
         return 0;
     };
-    if class_cache_size <= 0 {
+    if class_cache_size == 0 {
         return 1;
     }
-    if 0x10000 <= class_cache_size {
+    if class_cache_size < 0 {
+        // asr::print_message(&format!("monoimage_class_cache_score 0x{:X?} ? negative class_cache_size = -0x{:X?}", monoimage_class_cache, -class_cache_size));
         return 2;
+    }
+    if 0x10000 <= class_cache_size {
+        // asr::print_message(&format!("monoimage_class_cache_score 0x{:X?} ? large class_cache_size = 0x{:X?}", monoimage_class_cache, class_cache_size));
+        return 3;
     }
     let Ok(table_addr) = read_pointer(
         process,
         pointer_size,
         image + monoimage_class_cache + monointernalhashtable_table,
     ) else {
-        return 3;
-    };
-    let Ok(table) = read_pointer(process, pointer_size, table_addr) else {
         return 4;
     };
-    let Ok(class) = read_pointer(process, pointer_size, table) else {
+    let Ok(table) = read_pointer(process, pointer_size, table_addr) else {
         return 5;
     };
-    if process.read::<u8>(class).is_err() {
+    let Ok(class) = read_pointer(process, pointer_size, table) else {
         return 6;
-    }
-    if class != table {
+    };
+    if process.read::<u8>(class).is_err() {
+        // asr::print_message(&format!("monoimage_class_cache_score 0x{:X?} ? class is_err: 0x{}", monoimage_class_cache, class));
         return 7;
     }
-    8
+    if class != table {
+        return 8;
+    }
+    9
 }
 
 fn monoclass_image_score(
