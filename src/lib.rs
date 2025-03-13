@@ -327,6 +327,15 @@ async fn option_main(process: &Process, name: &str) -> Option<()> {
 
             process.read::<Address32>(ptr).ok()?.into()
         }
+        (PointerSize::Bit32, BinaryFormat::ELF) => {
+            const SIG_32_1: Signature<2> = Signature::new("FF B3");
+
+            let ptr = [SIG_32_1].iter().find_map(|sig| {
+                sig.scan_process_range(process, (mono_assembly_foreach_address, 0x100))
+            })? + 2;
+
+            process.read::<Address32>(ptr).ok()?.into()
+        }
         _ => {
             return None;
         }
