@@ -1173,12 +1173,16 @@ fn detect_version(process: &Process, mono_name: &str) -> Option<mono::Version> {
 
     // null "202" wildcard "."
     const SIG_202X: Signature<6> = Signature::new("00 32 30 32 ?? 2E");
+    // null "6000."
+    const SIG_6000: Signature<6> = Signature::new("00 36 30 30 30 2E");
 
-    let Some(addr) = SIG_202X.scan_process_range(process, unity_range) else {
+    let Some(addr) = SIG_202X.scan_process_range(process, unity_range).or_else(|| SIG_6000.scan_process_range(process, unity_range)) else {
+        asr::print_message("detect_version: SIG_202X, SIG_6000 not found, assuming V2");
         return Some(mono::Version::V2);
     };
 
     let version_string = process.read::<[u8; 6]>(addr + 1).ok()?;
+    asr::print_message(&format!("detect_version: version_string = {:?}", version_string));
 
     let (before, after) = version_string.split_at(version_string.iter().position(|&x| x == b'.')?);
 
@@ -1187,8 +1191,10 @@ fn detect_version(process: &Process, mono_name: &str) -> Option<mono::Version> {
     let unity_minor: u32 = ascii_read_u32(&after[1..]);
 
     Some(if (unity == 2021 && unity_minor >= 2) || (unity > 2021) {
+        asr::print_message(&format!("detect_version: unity = {}, unity_minor = {}, V3", unity, unity_minor));
         mono::Version::V3
     } else {
+        asr::print_message(&format!("detect_version: unity = {}, unity_minor = {}, V2", unity, unity_minor));
         mono::Version::V2
     })
 }
